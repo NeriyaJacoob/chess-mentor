@@ -1,0 +1,138 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+:root {
+  --primary: #6096BA;
+  --secondary: #274C77;
+  --success: #34A853;
+  --warning: #F7C548;
+  --danger: #D72631;
+  --dark-square: #D18B47;
+  --light-square: #FFCE9E;
+  --board-border: #8B4513;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f5f5f5;
+  direction: ltr;
+}
+
+body.rtl {
+  direction: rtl;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary);
+}
+
+/* Chess piece animations */
+.chess-piece {
+  transition: all 0.2s ease-in-out;
+  cursor: grab;
+}
+
+.chess-piece:active {
+  cursor: grabbing;
+  transform: scale(1.1);
+  z-index: 1000;
+}
+
+.chess-piece.dragging {
+  opacity: 0.8;
+  transform: scale(1.2);
+  z-index: 1000;
+}
+
+/* Square highlighting */
+.square-highlight {
+  animation: highlightPulse 0.3s ease-in-out;
+}
+
+@keyframes highlightPulse {
+  0% { background-color: rgba(255, 255, 0, 0); }
+  50% { background-color: rgba(255, 255, 0, 0.4); }
+  100% { background-color: rgba(255, 255, 0, 0.2); }
+}
+
+.legal-move {
+  position: relative;
+}
+
+.legal-move::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.legal-move.capture::after {
+  width: 80%;
+  height: 80%;
+  background-color: transparent;
+  border: 4px solid rgba(255, 0, 0, 0.7);
+  border-radius: 50%;
+}
+
+/* Loading animations */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Button styles */
+.btn-primary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-success {
+  @apply bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-danger {
+  @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
