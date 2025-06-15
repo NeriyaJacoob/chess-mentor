@@ -15,7 +15,7 @@ const ChessSquare = ({
   const getSquareClasses = () => {
     let classes = 'relative w-12 h-12 flex items-center justify-center cursor-pointer transition-all duration-200 ';
     
-    // Base color
+    // Base color using Tailwind classes
     if (isLight) {
       classes += 'bg-amber-100 ';
     } else {
@@ -31,9 +31,9 @@ const ChessSquare = ({
   const getHighlightClasses = () => {
     switch (highlightType) {
       case 'selected':
-        return 'ring-4 ring-blue-400 ring-opacity-70';
+        return 'ring-4 ring-blue-400 ring-opacity-70 bg-blue-200 bg-opacity-50';
       case 'lastMove':
-        return 'ring-2 ring-yellow-400 ring-opacity-50';
+        return 'ring-2 ring-yellow-400 ring-opacity-70 bg-yellow-200 bg-opacity-30';
       case 'legalMove':
         return 'legal-move';
       case 'capture':
@@ -53,23 +53,6 @@ const ChessSquare = ({
       whileTap={{ scale: 0.98 }}
       layout
     >
-      {/* Square highlight overlay */}
-      {isHighlighted && highlightType === 'selected' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute inset-0 bg-blue-400 bg-opacity-30 pointer-events-none"
-        />
-      )}
-      
-      {isHighlighted && highlightType === 'lastMove' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute inset-0 bg-yellow-400 bg-opacity-30 pointer-events-none"
-        />
-      )}
-
       {children}
     </motion.div>
   );
