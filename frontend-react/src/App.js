@@ -2,12 +2,11 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import ProfessionalLayout from './layouts/ProfessionalLayout';
-import HomePage from './pages/HomePage';
-import PlayPage from './pages/PlayPage';
-import AnalysisPage from './pages/AnalysisPage';
-import PuzzlesPage from './pages/PuzzlesPage';
-import SettingsPage from './pages/SettingsPage';
-import './App.css';
+import HomePage from './Pages/HomePage';
+import PlayPage from './Pages/PlayPage';
+import AnalysisPage from './Pages/AnalysisPage';
+import PuzzlesPage from './Pages/PuzzlesPage';
+import SettingsPage from './Pages/SettingsPage';
 
 function App() {
   return (

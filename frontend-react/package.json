@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
+    "@fontsource/inter": "^5.2.6",
+    "@fontsource/jetbrains-mono": "^5.2.6",
     "@reduxjs/toolkit": "^1.9.7",
     "axios": "^1.5.1",
     "chess.js": "^1.0.0-beta.6",
