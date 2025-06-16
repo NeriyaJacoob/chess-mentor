@@ -704,3 +704,18 @@
   background-color: var(--info-500);
   color: white;
 }
+/* Modern Backgrounds */
+.bg-mesh {
+    background: radial-gradient(ellipse at top left, rgba(102, 126, 234, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at top right, rgba(245, 87, 108, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom left, rgba(79, 172, 254, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom right, rgba(118, 75, 162, 0.15) 0%, transparent 50%),
+                linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.modern-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}

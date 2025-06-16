@@ -77,7 +77,7 @@ const AnalysisPage = () => {
   };
 
   return (
-    <div className="h-full flex bg-gray-50">
+    <div className="h-full flex bg-mesh">
       {/* Analysis Controls */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
         {/* Analysis Type Selection */}

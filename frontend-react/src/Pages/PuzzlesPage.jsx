@@ -74,7 +74,7 @@ const PuzzlesPage = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-mesh p-6 space-y-6 max-w-7xl mx-auto">
       {/* Puzzle Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {stats.map((stat, index) => {

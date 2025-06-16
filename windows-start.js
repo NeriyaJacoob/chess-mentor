@@ -66,12 +66,18 @@ JWT_SECRET=chessmentor-secret-key`;
         console.log('🔧 מפעיל Backend...');
         exec('start "ChessMentor Backend" cmd /k "npm run dev"', { cwd: 'backend-nodejs' });
         
-        // המתנה ואז הפעלת Frontend
+        // המתנה ואז הפעלת Frontend (בלי BROWSER=none כדי שלא יפתח פעמיים)
         setTimeout(() => {
             console.log('🌐 מפעיל Frontend...');
-            exec('start "ChessMentor Frontend" cmd /k "npm start"', { cwd: 'frontend-react' });
             
-            // פתיחת דפדפן
+            // הגדרת משתנה סביבה שלא יפתח דפדפן אוטומטית
+            const env = { ...process.env, BROWSER: 'none' };
+            exec('start "ChessMentor Frontend" cmd /k "set BROWSER=none && npm start"', { 
+                cwd: 'frontend-react',
+                env: env 
+            });
+            
+            // פתיחת דפדפן ידנית פעם אחת בלבד
             setTimeout(() => {
                 console.log('🔍 פותח דפדפן...');
                 exec('start http://localhost:3000');
@@ -79,8 +85,9 @@ JWT_SECRET=chessmentor-secret-key`;
                 console.log('\n✅ ChessMentor פועל!');
                 console.log('🌐 Frontend: http://localhost:3000');
                 console.log('🔧 Backend: http://localhost:5000');
+                console.log('\n💡 טיפ: אם הדפדפן לא נפתח, לך ל: http://localhost:3000');
                 
-            }, 8000);
+            }, 10000); // יותר זמן המתנה לוודא שהשרת עלה
         }, 3000);
         
     } catch (error) {
