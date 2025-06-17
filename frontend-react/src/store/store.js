@@ -1,8 +1,29 @@
-// src/store/store.js
+// src/store/store.js - תיקון Redux Store
 import { configureStore } from '@reduxjs/toolkit';
-import gameReducer from './slices/gameSlice';
-import authReducer from './slices/authSlice';
-import coachReducer from './slices/coachSlice';
+
+// Import reducers with error handling
+let gameReducer, authReducer, coachReducer;
+
+try {
+  gameReducer = require('./slices/gameSlice').default;
+} catch (error) {
+  console.error('Failed to load gameSlice:', error);
+  gameReducer = (state = {}) => state;
+}
+
+try {
+  authReducer = require('./slices/authSlice').default;
+} catch (error) {
+  console.error('Failed to load authSlice:', error);
+  authReducer = (state = {}) => state;
+}
+
+try {
+  coachReducer = require('./slices/coachSlice').default;
+} catch (error) {
+  console.error('Failed to load coachSlice:', error);
+  coachReducer = (state = {}) => state;
+}
 
 export const store = configureStore({
   reducer: {

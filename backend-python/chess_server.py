@@ -1,6 +1,7 @@
 """
 ChessMentor Python Server
 FastAPI + WebSocket + Stockfish Integration
+Fixed for Windows CMD compatibility
 """
 
 import asyncio
@@ -101,7 +102,7 @@ class ChessServer:
         player_id = str(uuid.uuid4())
         
         try:
-            print(f"🔗 Player connected: {player_id}")
+            print(f"Player connected: {player_id}")
             
             while True:
                 try:
@@ -113,7 +114,7 @@ class ChessServer:
                 except json.JSONDecodeError:
                     await self.send_error(websocket, "Invalid JSON format")
                 except Exception as e:
-                    print(f"❌ Message handling error: {e}")
+                    print(f"Message handling error: {e}")
                     await self.send_error(websocket, str(e))
                     
         except WebSocketDisconnect:
@@ -125,7 +126,7 @@ class ChessServer:
         action = message.get('action')
         data = message.get('data', {})
         
-        print(f"📨 Received {action} from {player_id}")
+        print(f"Received {action} from {player_id}")
         
         if action == 'join':
             await self.handle_join(websocket, player_id, data)
@@ -167,7 +168,7 @@ class ChessServer:
         if not player or player.is_in_game:
             return
 
-        print(f"🎮 {player.name} looking for {mode} game")
+        print(f"{player.name} looking for {mode} game")
 
         if mode == 'ai':
             await self.start_ai_game(player)
@@ -199,7 +200,7 @@ class ChessServer:
         player.is_in_game = True
         player.game_id = game_id
         
-        print(f"🤖 Started AI game {game_id} for {player.name}")
+        print(f"Started AI game {game_id} for {player.name}")
         
         await self.send_message(player.websocket, {
             'type': 'game_start',
@@ -269,7 +270,7 @@ class ChessServer:
             p.is_in_game = True
             p.game_id = game_id
         
-        print(f"👥 Started multiplayer game {game_id}: {white_player.name} vs {black_player.name}")
+        print(f"Started multiplayer game {game_id}: {white_player.name} vs {black_player.name}")
         
         # Notify both players
         await self.send_message(player1.websocket, {
@@ -320,7 +321,7 @@ class ChessServer:
             await self.send_error(player.websocket, f"Invalid move: {move_uci}")
             return
         
-        print(f"♟️ {player.name} played {move_uci}")
+        print(f"{player.name} played {move_uci}")
         
         # Broadcast move to all players in game
         await self.broadcast_to_game(game.id, {
@@ -346,14 +347,14 @@ class ChessServer:
         if not game:
             return
         
-        print("🤖 AI thinking...")
+        print("AI thinking...")
         
         # Add small delay for realism
         await asyncio.sleep(0.5)
         
         ai_move = game.chess_game.computer_move(thinking_time=1.0)
         if ai_move:
-            print(f"🤖 AI played {ai_move.uci()}")
+            print(f"AI played {ai_move.uci()}")
             
             await self.broadcast_to_game(game_id, {
                 'type': 'move_made',
@@ -436,7 +437,7 @@ class ChessServer:
         if not player:
             return
         
-        print(f"🔌 Player disconnected: {player.name}")
+        print(f"Player disconnected: {player.name}")
         
         # Remove from waiting queue
         if player in self.waiting_queue:
@@ -474,7 +475,7 @@ class ChessServer:
         
         game.status = 'finished'
         
-        print(f"🏁 Game {game_id} ended: {result}")
+        print(f"Game {game_id} ended: {result}")
         
         # Update players
         for player in [game.white_player, game.black_player]:
@@ -504,7 +505,7 @@ class ChessServer:
         try:
             await websocket.send_text(json.dumps(message))
         except Exception as e:
-            print(f"❌ Failed to send message: {e}")
+            print(f"Failed to send message: {e}")
 
     async def send_error(self, websocket: WebSocket, error_message: str):
         await self.send_message(websocket, {
@@ -522,11 +523,11 @@ class ChessServer:
                 await self.send_message(player.websocket, message)
 
     def run(self, host: str = "localhost", port: int = 5001):
-        print(f"🚀 ChessMentor Chess Server starting...")
-        print(f"📍 Server: {host}:{port}")
-        print(f"🐟 Stockfish: {self.stockfish_path}")
-        print(f"🌐 WebSocket: ws://{host}:{port}/ws")
-        print(f"💚 Health: http://{host}:{port}/health")
+        print("ChessMentor Chess Server starting...")
+        print(f"Server: {host}:{port}")
+        print(f"Stockfish: {self.stockfish_path}")
+        print(f"WebSocket: ws://{host}:{port}/ws")
+        print(f"Health: http://{host}:{port}/health")
         
         uvicorn.run(self.app, host=host, port=port, log_level="info")
 

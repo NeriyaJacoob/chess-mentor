@@ -151,60 +151,46 @@ const PlayPage = () => {
               isConnectedToServer ? 'bg-green-400 animate-pulse' : 'bg-red-400'
             }`}></div>
             <span className="text-sm font-medium">
-              {isConnectedToServer ? 'Server Connected' : 'Server Offline'}
+              {isConnectedToServer ? 'Connected to Server' : 'Offline Mode'}
             </span>
           </div>
-          
+
           {serverError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-red-800">{serverError}</p>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">
+              {serverError}
             </div>
           )}
-          
-          {isSearchingForGame && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <div className="flex items-center space-x-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <p className="text-sm text-blue-800">Looking for opponent...</p>
-              </div>
-            </div>
-          )}
-          
+
           {opponent && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-green-800">
-                Playing against: <strong>{opponent.name}</strong> (ELO: {opponent.elo})
-              </p>
+            <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg text-sm mb-4">
+              Playing vs {opponent.name} (ELO: {opponent.elo})
             </div>
           )}
         </div>
 
         {/* Game Mode Selection */}
         <div className="p-6 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Game Setup</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Game Mode</h3>
+          
           <div className="space-y-2">
             {gameModes.map((mode) => (
               <button
                 key={mode.id}
                 onClick={() => setGameMode(mode.id)}
-                disabled={mode.id === 'multiplayer' && !isConnectedToServer}
-                className={`w-full text-left p-3 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${
                   gameMode === mode.id
-                    ? 'bg-blue-50 border-blue-200 text-blue-900'
-                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 <div className="font-medium">{mode.label}</div>
                 <div className="text-sm opacity-75">{mode.description}</div>
-                {mode.id === 'multiplayer' && !isConnectedToServer && (
-                  <div className="text-xs text-red-600 mt-1">Server required</div>
-                )}
               </button>
             ))}
           </div>
         </div>
 
-        {/* AI Level Selection */}
+        {/* AI Level Selection (only for AI mode) */}
         {gameMode === 'ai' && (
           <div className="p-6 border-b border-gray-100">
             <h4 className="text-md font-semibold text-gray-900 mb-4">AI Difficulty</h4>
@@ -213,7 +199,7 @@ const PlayPage = () => {
                 <button
                   key={level.level}
                   onClick={() => setAiLevel(level.level)}
-                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                  className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${
                     aiLevel === level.level
                       ? 'bg-green-50 border-green-200 text-green-900'
                       : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
@@ -356,7 +342,9 @@ const PlayPage = () => {
                  opponent ? `Playing vs ${opponent.name}` : 'Chess Game'}
               </h2>
               <p className="text-gray-600">
-                {isGameOver ? gameResult : `Move ${Math.ceil(moveCount / 2)} - ${playerColor === 'white' ? 'White' : 'Black'} to move`}
+                {isGameOver ? gameResult : `Move ${Math.ceil(moveCount / 2)} - ${playerColor === 'white' ? 
+                  (moveCount % 2 === 0 ? 'Your turn' : 'Opponent\'s turn') : 
+                  (moveCount % 2 === 1 ? 'Your turn' : 'Opponent\'s turn')}`}
               </p>
             </div>
             
@@ -364,86 +352,41 @@ const PlayPage = () => {
               <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
                 <Settings className="h-5 w-5" />
               </button>
-              {chessSocketService.isInGame() && (
-                <button 
-                  onClick={handleResign}
-                  className="p-2 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg transition-colors"
-                >
-                  <Flag className="h-5 w-5" />
-                </button>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Chess Board */}
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="relative">
+        {/* Chess Board Container */}
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-2xl w-full">
             <ChessBoard />
-            
-            {/* Game Over Overlay */}
-            {isGameOver && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-                <div className="modern-card p-8 rounded-xl shadow-xl text-center max-w-sm">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">Game Over!</h3>
-                  <p className="text-gray-600 mb-6">{gameResult}</p>
-                  <div className="space-y-3">
-                    <button
-                      onClick={handleNewGame}
-                      className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    >
-                      New Game
-                    </button>
-                    <button className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors font-medium">
-                      Analyze Game
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Pause Overlay */}
-            {isPaused && !isGameOver && (
-              <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center rounded-lg">
-                <div className="modern-card p-6 rounded-xl shadow-xl text-center">
-                  <Pause className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Game Paused</h3>
-                  <button
-                    onClick={() => setIsPaused(false)}
-                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Resume
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
-      </div>
 
-      {/* Move History Panel */}
-      <div className="w-80 modern-card border-l border-gray-200 p-6">
-        <h4 className="text-lg font-semibold text-gray-900 mb-4">Move History</h4>
-        
-        {history.length > 0 ? (
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {history.map((move, index) => (
-              <div key={index} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
-                <span className="text-sm text-gray-500 w-8">{Math.floor(index / 2) + 1}.</span>
-                <span className="font-mono text-gray-900 flex-1">{move.san}</span>
-                {move.captured && (
-                  <span className="text-sm text-red-600">×{move.captured}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center text-gray-500 py-8">
-            <Square className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No moves yet</p>
-            <p className="text-sm">Start playing to see move history</p>
-          </div>
-        )}
+        {/* Move History Panel */}
+        <div className="modern-card border-t border-gray-200 p-4 h-48 overflow-hidden">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Move History</h3>
+          
+          {history.length > 0 ? (
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {history.map((move, index) => (
+                <div key={index} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                  <span className="text-sm text-gray-500 w-8">{Math.floor(index / 2) + 1}.</span>
+                  <span className="font-mono text-gray-900 flex-1">{move.san}</span>
+                  {move.captured && (
+                    <span className="text-sm text-red-600">×{move.captured}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-gray-500 py-8">
+              <Square className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No moves yet</p>
+              <p className="text-sm">Start playing to see move history</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
