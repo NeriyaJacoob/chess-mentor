@@ -1,5 +1,9 @@
 // frontend-react/src/services/chessSocketService.js
-
+//
+// Tiny wrapper around the WebSocket API used by the React
+// application. Provides a simple event based interface for
+// starting games, sending moves and receiving updates from the
+// Python backend.
 class ChessSocketService {
   constructor() {
     this.socket = null;
@@ -18,6 +22,9 @@ class ChessSocketService {
     };
   }
 
+  // Connect to the Python WebSocket server and register the player.
+  // Returns a promise that resolves once the underlying socket is open
+  // and initial "join" message has been sent.
   connect(playerData = {}) {
     return new Promise((resolve, reject) => {
       try {
@@ -78,6 +85,8 @@ class ChessSocketService {
     });
   }
 
+  // Parse a single message from the server and trigger the
+  // appropriate callback. All protocol message types are handled here.
   handleMessage(message) {
     const { type, data } = message;
     console.log('📨 Received:', type, data);

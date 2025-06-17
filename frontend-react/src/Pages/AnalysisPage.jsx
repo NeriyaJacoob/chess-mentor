@@ -1,4 +1,4 @@
-// src/pages/AnalysisPage.jsx
+// AnalysisPage - board evaluation tools
 import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { 

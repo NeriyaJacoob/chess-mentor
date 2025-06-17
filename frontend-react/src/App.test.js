@@ -1,3 +1,4 @@
+// Jest test to ensure App renders
 import { render, screen } from '@testing-library/react';
 import App from './App';
 

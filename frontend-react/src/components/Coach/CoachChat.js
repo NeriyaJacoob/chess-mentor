@@ -1,4 +1,5 @@
 // src/components/Coach/CoachChat.js
+// Chat interface with the AI coach
 import React, { useState, useRef, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';

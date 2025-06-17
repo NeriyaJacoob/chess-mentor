@@ -40,6 +40,7 @@ class GameSession:
     status: str = 'active'  # 'active', 'finished'
 
 class ChessServer:
+    """Realtime game server exposing WebSocket API"""
     def __init__(self, stockfish_path: str):
         self.app = FastAPI(title="ChessMentor Chess Server", version="1.0.0")
         self.stockfish_path = stockfish_path
@@ -175,6 +176,7 @@ class ChessServer:
         else:
             await self.find_multiplayer_game(player)
 
+    # Create a single-player game vs Stockfish
     async def start_ai_game(self, player: Player):
         game_id = str(uuid.uuid4())
         
@@ -212,6 +214,7 @@ class ChessServer:
             }
         })
 
+    # Match two players waiting in the queue
     async def find_multiplayer_game(self, player: Player):
         # Simple matchmaking
         opponent = None
@@ -239,6 +242,7 @@ class ChessServer:
                     'data': {'message': 'No opponent found. Try AI mode?'}
                 })
 
+    # Start a human vs human match
     async def start_multiplayer_game(self, player1: Player, player2: Player):
         game_id = str(uuid.uuid4())
         
@@ -293,6 +297,12 @@ class ChessServer:
             }
         })
 
+    # Process a move sent by a player
+    #
+    # 1. Validate the player and game session
+    # 2. Ensure it is the player's turn
+    # 3. Apply the move using ``ChessGame.player_move``
+    # 4. Broadcast the update and optionally trigger an AI reply
     async def handle_move(self, player_id: str, data: dict):
         player = self.players.get(player_id)
         if not player or not player.is_in_game:
@@ -342,13 +352,21 @@ class ChessServer:
         if game.type == 'ai' and current_turn == 'white':  # Player just moved as white
             await self.make_ai_move(game.id)
 
+    # Let Stockfish respond with a move
     async def make_ai_move(self, game_id: str):
+        """Generate a Stockfish reply for the given game.
+
+        1. Fetch the `GameSession` from storage.
+        2. Ask the underlying `ChessGame` object for a computer move.
+        3. Broadcast the move to all players and check for game end.
+        """
+
         game = self.games.get(game_id)
         if not game:
             return
-        
+
         print("AI thinking...")
-        
+
         # Add small delay for realism
         await asyncio.sleep(0.5)
         
@@ -369,6 +387,7 @@ class ChessServer:
             if game.chess_game.is_game_over():
                 await self.end_game(game_id)
 
+    # Provide engine insights for a player's move
     async def handle_analyze_move(self, player_id: str, data: dict):
         player = self.players.get(player_id)
         if not player or not player.is_in_game:

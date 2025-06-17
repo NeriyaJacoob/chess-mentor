@@ -1,4 +1,5 @@
 // src/components/Game/GameControls.js
+// Buttons for controlling the game flow
 import React from 'react';
 import { motion } from 'framer-motion';
 

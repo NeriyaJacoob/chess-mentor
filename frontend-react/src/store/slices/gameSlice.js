@@ -1,4 +1,5 @@
 // src/store/slices/gameSlice.js
+// Stores current game state
 import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {

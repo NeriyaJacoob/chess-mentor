@@ -1,4 +1,5 @@
 // src/index.js - תיקון React Provider
+// Entry point that renders the React application
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Provider } from 'react-redux';

@@ -1,3 +1,4 @@
+// HomePage - landing screen with feature cards
 import React, { useState, useEffect } from 'react';
 import { 
   Play, 

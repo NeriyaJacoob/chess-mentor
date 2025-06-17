@@ -1,3 +1,4 @@
+// Interactive chessboard component for React
 // src/components/ChessBoard/ChessBoard.jsx - גרסה מאוחדת
 import React, { useState, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
@@ -67,6 +68,7 @@ const ChessBoard = ({
   const squareSize = size / 8;
 
   // Event handlers
+  // Handle board square clicks and piece selection
   const handleSquareClick = useCallback((square) => {
     if (!interactive) return;
     
@@ -90,6 +92,7 @@ const ChessBoard = ({
     }
   }, [dispatch, selectedSquare, legalMoves, board, playerColor, interactive]);
 
+  // Start dragging a piece
   const handleDragStart = useCallback((e, piece, square) => {
     if (!interactive) return;
     
@@ -104,6 +107,7 @@ const ChessBoard = ({
     setDraggedFrom(null);
   }, []);
 
+  // Drop a dragged piece onto target square
   const handleDrop = useCallback((e, targetSquare) => {
     e.preventDefault();
     

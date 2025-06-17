@@ -1,4 +1,5 @@
 // src/components/Auth/OpenAIAuth.js
+// Component for entering OpenAI API key
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { authenticateOpenAI, logout, clearError } from '../../store/slices/authSlice';

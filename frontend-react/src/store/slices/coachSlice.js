@@ -1,4 +1,5 @@
 // src/store/slices/coachSlice.js
+// Handles chat messages and analysis replies
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 

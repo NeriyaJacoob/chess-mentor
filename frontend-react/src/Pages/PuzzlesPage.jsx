@@ -1,4 +1,4 @@
-// src/pages/PuzzlesPage.jsx
+// PuzzlesPage - tactical training area
 import React, { useState } from 'react';
 import { 
   Target, 
