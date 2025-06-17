@@ -1,4 +1,4 @@
-// src/components/ChessBoard/ChessSquare.jsx
+// src/components/ChessBoard/ChessSquare.jsx - גרסה מאוחדת
 import React from 'react';
 import { motion } from 'framer-motion';
 
@@ -8,32 +8,36 @@ const ChessSquare = ({
   isHighlighted, 
   highlightType, 
   size = 60,
+  colors = { light: '#F0D9B5', dark: '#B58863' },
   onClick, 
   onDrop, 
   onDragOver, 
   onMouseEnter,
   onMouseLeave,
   animationDuration = 0.3,
+  interactive = true,
   children 
 }) => {
-  const getSquareColors = () => {
-    if (isLight) {
-      return {
-        base: 'bg-amber-100',
-        hover: 'hover:bg-amber-200',
-        active: 'active:bg-amber-300'
-      };
-    } else {
-      return {
-        base: 'bg-amber-700',
-        hover: 'hover:bg-amber-600',
-        active: 'active:bg-amber-800'
-      };
-    }
+  
+  const getSquareStyles = () => {
+    const baseColor = isLight ? colors.light : colors.dark;
+    
+    return {
+      backgroundColor: baseColor,
+      width: size,
+      height: size,
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: interactive ? 'pointer' : 'default',
+      transition: 'all 0.2s ease-out',
+      userSelect: 'none'
+    };
   };
 
   const getHighlightStyles = () => {
-    const baseStyle = 'absolute inset-0 pointer-events-none';
+    const baseStyle = 'absolute inset-0 pointer-events-none z-10';
     
     switch (highlightType) {
       case 'selected':
@@ -46,37 +50,60 @@ const ChessSquare = ({
         return `${baseStyle} chess-capture-ring`;
       case 'hover':
         return `${baseStyle} bg-white/20 rounded-sm`;
+      case 'check':
+        return `${baseStyle} bg-red-400/60 ring-4 ring-red-400/80 rounded-sm animate-pulse`;
       default:
         return '';
     }
   };
 
-  const colors = getSquareColors();
+  const handleClick = () => {
+    if (interactive && onClick) {
+      onClick();
+    }
+  };
+
+  const handleDrop = (e) => {
+    if (interactive && onDrop) {
+      onDrop(e);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    if (interactive && onDragOver) {
+      onDragOver(e);
+    }
+  };
+
+  const handleMouseEnter = () => {
+    if (interactive && onMouseEnter) {
+      onMouseEnter();
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (interactive && onMouseLeave) {
+      onMouseLeave();
+    }
+  };
 
   return (
     <motion.div
-      className={`
-        relative cursor-pointer transition-all select-none
-        ${colors.base} ${colors.hover} ${colors.active}
-        flex items-center justify-center
-      `}
-      style={{ 
-        width: size, 
-        height: size,
-      }}
-      onClick={onClick}
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      whileHover={{ 
+      className="chess-square"
+      style={getSquareStyles()}
+      onClick={handleClick}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      whileHover={interactive ? { 
         scale: 1.02,
         transition: { duration: 0.1 }
-      }}
-      whileTap={{ 
+      } : {}}
+      whileTap={interactive ? { 
         scale: 0.98,
         transition: { duration: 0.1 }
-      }}
+      } : {}}
       layout
       transition={{ duration: animationDuration }}
     >
@@ -94,7 +121,7 @@ const ChessSquare = ({
       {/* Legal Move Dot */}
       {highlightType === 'legalMove' && (
         <motion.div
-          className="absolute w-6 h-6 bg-green-500/60 rounded-full pointer-events-none"
+          className="absolute w-6 h-6 bg-green-500/60 rounded-full pointer-events-none z-20"
           initial={{ scale: 0, opacity: 0 }}
           animate={{ 
             scale: [0, 1.2, 1], 
@@ -111,7 +138,7 @@ const ChessSquare = ({
       {/* Capture Ring */}
       {highlightType === 'capture' && (
         <motion.div
-          className="absolute inset-2 border-4 border-red-500/70 rounded-full pointer-events-none"
+          className="absolute inset-2 border-4 border-red-500/70 rounded-full pointer-events-none z-20"
           initial={{ scale: 0, opacity: 0 }}
           animate={{ 
             scale: [0, 1.1, 1], 
@@ -125,20 +152,44 @@ const ChessSquare = ({
         />
       )}
 
+      {/* Check Warning */}
+      {highlightType === 'check' && (
+        <motion.div
+          className="absolute inset-0 bg-red-500/30 border-2 border-red-500 rounded-sm pointer-events-none z-20"
+          animate={{ 
+            opacity: [0.3, 0.7, 0.3],
+            scale: [1, 1.05, 1]
+          }}
+          transition={{ 
+            duration: 1,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+      )}
+
       {/* Square Content (Chess Piece) */}
-      <div className="relative z-10 w-full h-full flex items-center justify-center">
+      <div className="relative z-30 w-full h-full flex items-center justify-center">
         {children}
       </div>
 
       {/* Square Coordinates (for debugging) */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="absolute top-0 left-0 text-xs text-black/30 font-mono">
+        <div className="absolute top-0 left-0 text-xs text-black/30 font-mono z-40 pointer-events-none">
           {square}
         </div>
+      )}
+
+      {/* Hover Effect */}
+      {interactive && (
+        <motion.div
+          className="absolute inset-0 bg-white/10 rounded-sm opacity-0 pointer-events-none z-10"
+          whileHover={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        />
       )}
     </motion.div>
   );
 };
 
 export default ChessSquare;
-

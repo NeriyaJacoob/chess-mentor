@@ -1,4 +1,4 @@
-// src/components/ChessBoard/ChessBoard.jsx
+// src/components/ChessBoard/ChessBoard.jsx - גרסה מאוחדת
 import React, { useState, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { makeMove, selectSquare } from '../../store/slices/gameSlice';
@@ -6,14 +6,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ChessSquare from './ChessSquare';
 import ChessPiece from './ChessPiece';
 
-const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'normal' }) => {
+const ChessBoard = ({ 
+  size = 480, 
+  showCoordinates = true, 
+  animationSpeed = 'normal',
+  interactive = true 
+}) => {
   const dispatch = useDispatch();
-  const { fen, selectedSquare, legalMoves, lastMove, playerColor } = useSelector(state => state.game);
+  const { fen, selectedSquare, legalMoves, lastMove, playerColor, pieceStyle, boardTheme } = useSelector(state => state.game);
+  
+  // Local state for drag & drop
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [draggedFrom, setDraggedFrom] = useState(null);
   const [hoveredSquare, setHoveredSquare] = useState(null);
 
-  // Parse FEN to get board position
+  // Parse FEN to board representation
   const board = useMemo(() => {
     const fenParts = fen.split(' ');
     const boardPart = fenParts[0];
@@ -33,7 +40,7 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
           });
           colIndex++;
         } else {
-          // It's a number of empty squares
+          // Empty squares
           const emptySquares = parseInt(char);
           for (let i = 0; i < emptySquares; i++) {
             boardRow.push({
@@ -50,7 +57,7 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
     return parsedBoard;
   }, [fen]);
 
-  // Flip board if playing as black
+  // Display board (flip if playing as black)
   const displayBoard = useMemo(() => {
     return playerColor === 'black' 
       ? [...board].reverse().map(row => [...row].reverse()) 
@@ -59,7 +66,10 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
 
   const squareSize = size / 8;
 
+  // Event handlers
   const handleSquareClick = useCallback((square) => {
+    if (!interactive) return;
+    
     const piece = board.flat().find(sq => sq.square === square)?.piece;
     
     if (selectedSquare && legalMoves.includes(square)) {
@@ -78,14 +88,16 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
       // Deselect
       dispatch(selectSquare(null));
     }
-  }, [dispatch, selectedSquare, legalMoves, board, playerColor]);
+  }, [dispatch, selectedSquare, legalMoves, board, playerColor, interactive]);
 
   const handleDragStart = useCallback((e, piece, square) => {
+    if (!interactive) return;
+    
     setDraggedPiece(piece);
     setDraggedFrom(square);
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', ''); // Required for Firefox
-  }, []);
+    e.dataTransfer.setData('text/plain', '');
+  }, [interactive]);
 
   const handleDragEnd = useCallback(() => {
     setDraggedPiece(null);
@@ -95,10 +107,8 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
   const handleDrop = useCallback((e, targetSquare) => {
     e.preventDefault();
     
-    if (draggedFrom && targetSquare !== draggedFrom) {
-      if (legalMoves.includes(targetSquare)) {
-        dispatch(makeMove({ from: draggedFrom, to: targetSquare }));
-      }
+    if (draggedFrom && targetSquare !== draggedFrom && legalMoves.includes(targetSquare)) {
+      dispatch(makeMove({ from: draggedFrom, to: targetSquare }));
     }
     
     handleDragEnd();
@@ -108,6 +118,7 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
     e.preventDefault();
   }, []);
 
+  // Helper functions
   const isSquareHighlighted = useCallback((square) => {
     return selectedSquare === square || 
            legalMoves.includes(square) || 
@@ -134,6 +145,18 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
     }
   };
 
+  // Board theme colors
+  const getBoardColors = () => {
+    const themes = {
+      classic: { light: '#F0D9B5', dark: '#B58863' },
+      blue: { light: '#DEE3E6', dark: '#8CA2AD' },
+      green: { light: '#FFFFDD', dark: '#86A666' },
+      purple: { light: '#F3E5F5', dark: '#7B1FA2' }
+    };
+    return themes[boardTheme] || themes.classic;
+  };
+
+  const boardColors = getBoardColors();
   const coordinateFiles = playerColor === 'white' 
     ? ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] 
     : ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a'];
@@ -193,7 +216,6 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
             row.map((square, colIndex) => {
               const isLight = (rowIndex + colIndex) % 2 === 0;
               const highlightType = getSquareHighlightType(square.square);
-              const squareId = `${rowIndex}-${colIndex}`;
               
               return (
                 <ChessSquare
@@ -203,12 +225,14 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
                   isHighlighted={isSquareHighlighted(square.square)}
                   highlightType={highlightType}
                   size={squareSize - 1}
+                  colors={boardColors}
                   onClick={() => handleSquareClick(square.square)}
                   onDrop={(e) => handleDrop(e, square.square)}
                   onDragOver={handleDragOver}
                   onMouseEnter={() => setHoveredSquare(square.square)}
                   onMouseLeave={() => setHoveredSquare(null)}
                   animationDuration={getAnimationDuration()}
+                  interactive={interactive}
                 >
                   <AnimatePresence mode="wait">
                     {square.piece && (
@@ -218,10 +242,12 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
                         square={square.square}
                         isDragged={draggedFrom === square.square}
                         size={squareSize * 0.8}
+                        style={pieceStyle}
                         onDragStart={(e) => handleDragStart(e, square.piece, square.square)}
                         onDragEnd={handleDragEnd}
                         animationDuration={getAnimationDuration()}
                         layoutId={`piece-${square.piece}-${square.square}`}
+                        interactive={interactive}
                       />
                     )}
                   </AnimatePresence>
@@ -229,65 +255,39 @@ const ChessBoard = ({ size = 480, showCoordinates = true, animationSpeed = 'norm
               );
             })
           )}
-
-          {/* Move Arrows (for showing best moves or analysis) */}
-          <svg
-            className="absolute inset-0 pointer-events-none"
-            width={size - 40}
-            height={size - 40}
-            style={{ zIndex: 10 }}
-          >
-            {/* Example arrow - you can add logic to show move suggestions */}
-            {selectedSquare && legalMoves.length > 0 && (
-              <defs>
-                <marker
-                  id="arrowhead"
-                  markerWidth="10"
-                  markerHeight="7"
-                  refX="9"
-                  refY="3.5"
-                  orient="auto"
-                  fill="rgba(34, 197, 94, 0.6)"
-                >
-                  <polygon points="0 0, 10 3.5, 0 7" />
-                </marker>
-              </defs>
-            )}
-          </svg>
         </div>
 
-        {/* Premium Effects Overlay */}
-        <div className="absolute inset-0 rounded-lg pointer-events-none">
-          {/* Glow effect for selected piece */}
-          {selectedSquare && (
-            <motion.div
-              className="absolute bg-blue-400 rounded-full opacity-20 blur-xl"
-              style={{
-                width: squareSize * 1.5,
-                height: squareSize * 1.5,
-                left: '50%',
-                top: '50%',
-              }}
-              animate={{
-                scale: [1, 1.2, 1],
-                opacity: [0.2, 0.4, 0.2],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
-            />
-          )}
-        </div>
+        {/* Glow effect for selected piece */}
+        {selectedSquare && (
+          <motion.div
+            className="absolute bg-blue-400 rounded-full opacity-20 blur-xl pointer-events-none"
+            style={{
+              width: squareSize * 1.5,
+              height: squareSize * 1.5,
+              left: '50%',
+              top: '50%',
+            }}
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.2, 0.4, 0.2],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+          />
+        )}
       </div>
 
-      {/* Board Statistics Overlay (Optional) */}
+      {/* Debug info (development only) */}
       {process.env.NODE_ENV === 'development' && (
         <div className="absolute top-2 right-2 bg-black/80 text-white text-xs p-2 rounded backdrop-blur-sm">
-          <div>FEN: {fen.split(' ')[0]}</div>
+          <div>FEN: {fen.split(' ')[0].substring(0, 20)}...</div>
           <div>Selected: {selectedSquare || 'None'}</div>
           <div>Legal Moves: {legalMoves.length}</div>
+          <div>Style: {pieceStyle}</div>
+          <div>Theme: {boardTheme}</div>
         </div>
       )}
     </motion.div>
