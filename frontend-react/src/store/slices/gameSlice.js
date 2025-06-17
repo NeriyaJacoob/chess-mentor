@@ -15,7 +15,10 @@ const initialState = {
     black: []
   },
   lastMove: null,
-  isThinking: false
+  isThinking: false,
+  // New style settings
+  pieceStyle: 'classic',
+  boardTheme: 'classic'
 };
 
 const gameSlice = createSlice({
@@ -86,7 +89,9 @@ const gameSlice = createSlice({
       const newGame = new Chess();
       return {
         ...initialState,
-        fen: newGame.fen()
+        fen: newGame.fen(),
+        pieceStyle: state.pieceStyle,
+        boardTheme: state.boardTheme
       };
     },
     
@@ -150,6 +155,15 @@ const gameSlice = createSlice({
     
     setThinking: (state, action) => {
       state.isThinking = action.payload;
+    },
+
+    // New style actions
+    setPieceStyle: (state, action) => {
+      state.pieceStyle = action.payload;
+    },
+
+    setBoardTheme: (state, action) => {
+      state.boardTheme = action.payload;
     }
   },
 });
@@ -161,7 +175,9 @@ export const {
   loadGame,
   undoMove,
   setPlayerColor,
-  setThinking
+  setThinking,
+  setPieceStyle,
+  setBoardTheme
 } = gameSlice.actions;
 
 export default gameSlice.reducer;

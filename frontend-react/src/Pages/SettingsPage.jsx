@@ -1,6 +1,8 @@
 // src/pages/SettingsPage.jsx
 import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { setPieceStyle, setBoardTheme } from '../store/slices/gameSlice';
+
 import { 
   Bot, 
   Palette, 
@@ -35,6 +37,8 @@ const SettingsPage = () => {
     emailUpdates: false,
     darkMode: false
   });
+    const [selectedPieceStyle, setSelectedPieceStyle] = useState('classic');
+
 
   const sections = [
     { id: 'ai', label: 'AI Coach', icon: Bot, description: 'Configure your AI mentor' },
@@ -58,6 +62,13 @@ const SettingsPage = () => {
     { id: 'green', name: 'Forest Green', light: '#FFFFDD', dark: '#86A666' },
     { id: 'purple', name: 'Royal Purple', light: '#F3E5F5', dark: '#7B1FA2' }
   ];
+  // הוסף למעלה בפונקציה עם השאר useState:
+
+// הוסף פונקציה חדשה:
+const handlePieceStyleChange = (styleId) => {
+  setSelectedPieceStyle(styleId);
+  dispatch(setPieceStyle(styleId));
+};
 
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }));
@@ -144,8 +155,105 @@ const SettingsPage = () => {
           </div>
         );
 
-      case 'appearance':
+        // SettingsPage.jsx - החלף את חלק ה-appearance ב:
+        case 'appearance':
+          return (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">App Theme</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {themes.map((theme) => (
+                    <button
+                      key={theme.id}
+                      onClick={() => setSelectedTheme(theme.id)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        selectedTheme === theme.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className={`h-16 rounded ${theme.preview} border mb-3`}></div>
+                      <div className="text-sm font-medium text-gray-900">{theme.name}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Board Theme</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {boardThemes.map((theme) => (
+                    <button
+                      key={theme.id}
+                      onClick={() => setSelectedBoardTheme(theme.id)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        selectedBoardTheme === theme.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="grid grid-cols-2 h-16 rounded overflow-hidden mb-3">
+                        <div style={{ backgroundColor: theme.light }}></div>
+                        <div style={{ backgroundColor: theme.dark }}></div>
+                        <div style={{ backgroundColor: theme.dark }}></div>
+                        <div style={{ backgroundColor: theme.light }}></div>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">{theme.name}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Piece Style</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { id: 'classic', name: 'Classic PNG', description: 'Traditional realistic pieces' },
+                    { id: 'svg', name: 'Vector SVG', description: 'Modern crisp graphics' },
+                    { id: 'unicode', name: 'Unicode', description: 'Simple text symbols' }
+                  ].map((style) => (
+                    <button
+                      key={style.id}
+                      onClick={() => handlePieceStyleChange(style.id)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        selectedPieceStyle === style.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="h-16 flex items-center justify-center mb-3">
+                        {style.id === 'classic' && (
+                          <img 
+                            src="/assets/images/pieces/classic/white/wK.png" 
+                            alt="Classic King" 
+                            className="h-12 w-12"
+                          />
+                        )}
+                        {style.id === 'svg' && (
+                          <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
+                            <path d="M20 5L10 25H30L20 5Z" fill="#FFFFFF" stroke="#000000" strokeWidth="2"/>
+                            <path d="M10 25H30L25 35H15L10 25Z" fill="#FFFFFF" stroke="#000000" strokeWidth="2"/>
+                            <rect x="18" y="2" width="4" height="10" rx="2" fill="#FFFFFF" stroke="#000000" strokeWidth="2"/>
+                            <rect x="15" y="5" width="10" height="4" rx="2" fill="#FFFFFF" stroke="#000000" strokeWidth="2"/>
+                          </svg>
+                        )}
+                        {style.id === 'unicode' && (
+                          <span className="text-4xl">♔</span>
+                        )}
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">{style.name}</div>
+                      <div className="text-xs text-gray-500 mt-1">{style.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+
+
+// הוסף import למעלה:
         return (
+          
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">App Theme</h3>
@@ -347,6 +455,7 @@ const SettingsPage = () => {
         return null;
     }
   };
+
 
   return (
     <div className="h-full flex bg-gray-50">

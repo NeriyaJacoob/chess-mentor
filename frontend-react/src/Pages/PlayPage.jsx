@@ -1,5 +1,5 @@
 // src/pages/PlayPage.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { 
   RotateCcw, 
@@ -12,7 +12,8 @@ import {
   Play
 } from 'lucide-react';
 import ChessBoard from '../components/ChessBoard/ChessBoard';
-import { newGame, undoMove, setPlayerColor } from '../store/slices/gameSlice';
+import { newGame, undoMove, setPlayerColor, loadGame } from '../store/slices/gameSlice';
+import chessSocketService from '../services/chessSocketService';
 
 const PlayPage = () => {
   const dispatch = useDispatch();
@@ -20,9 +21,94 @@ const PlayPage = () => {
   const [gameMode, setGameMode] = useState('ai');
   const [aiLevel, setAiLevel] = useState(3);
   const [isPaused, setIsPaused] = useState(false);
+  const [isConnectedToServer, setIsConnectedToServer] = useState(false);
+  const [isSearchingForGame, setIsSearchingForGame] = useState(false);
+  const [opponent, setOpponent] = useState(null);
+  const [serverError, setServerError] = useState(null);
+
+  // Connect to chess server on component mount
+  useEffect(() => {
+    const connectToServer = async () => {
+      try {
+        await chessSocketService.connect({ 
+          name: 'Player', 
+          elo: 1200 
+        });
+        setIsConnectedToServer(true);
+        setServerError(null);
+        console.log('✅ Connected to chess server');
+      } catch (error) {
+        setServerError('Failed to connect to chess server');
+        console.error('❌ Connection failed:', error);
+      }
+    };
+
+    connectToServer();
+
+    // Set up event handlers
+    chessSocketService.onGameStart((data) => {
+      console.log('🎮 Game started:', data);
+      setIsSearchingForGame(false);
+      setOpponent(data.opponent);
+      
+      // Load the game position
+      if (data.position && data.position.fen) {
+        dispatch(loadGame({ fen: data.position.fen }));
+      }
+      
+      // Set player color
+      dispatch(setPlayerColor(data.color));
+    });
+
+    chessSocketService.onMoveMade((data) => {
+      console.log('♟️ Move made:', data);
+      
+      // Update the game position
+      if (data.position && data.position.fen) {
+        dispatch(loadGame({ fen: data.position.fen }));
+      }
+    });
+
+    chessSocketService.onGameEnd((data) => {
+      console.log('🏁 Game ended:', data.result);
+      setOpponent(null);
+      setIsSearchingForGame(false);
+      // The game result will be handled by the chess board component
+    });
+
+    chessSocketService.onError((data) => {
+      console.error('❌ Game error:', data.message);
+      setServerError(data.message);
+      setIsSearchingForGame(false);
+    });
+
+    chessSocketService.onSearching((data) => {
+      console.log('🔍 Searching for opponent...');
+      setIsSearchingForGame(true);
+    });
+
+    chessSocketService.onOpponentDisconnected((data) => {
+      console.log('🔌 Opponent disconnected');
+      setOpponent(null);
+      setServerError('Opponent disconnected');
+    });
+
+    // Cleanup on unmount
+    return () => {
+      chessSocketService.disconnect();
+      setIsConnectedToServer(false);
+    };
+  }, [dispatch]);
 
   const handleNewGame = () => {
-    dispatch(newGame());
+    if (isConnectedToServer && chessSocketService.isConnected) {
+      // Start online game
+      chessSocketService.findGame(gameMode);
+      setServerError(null);
+    } else {
+      // Start offline game
+      dispatch(newGame());
+    }
   };
 
   const handleUndoMove = () => {
@@ -33,9 +119,15 @@ const PlayPage = () => {
     dispatch(setPlayerColor(playerColor === 'white' ? 'black' : 'white'));
   };
 
+  const handleResign = () => {
+    if (chessSocketService.isInGame()) {
+      chessSocketService.resign();
+    }
+  };
+
   const gameModes = [
     { id: 'ai', label: 'vs AI', description: 'Play against computer' },
-    { id: 'friend', label: 'vs Friend', description: 'Local multiplayer' },
+    { id: 'multiplayer', label: 'vs Player', description: 'Online multiplayer' },
     { id: 'analysis', label: 'Analysis', description: 'Free analysis mode' }
   ];
 
@@ -51,7 +143,42 @@ const PlayPage = () => {
   return (
     <div className="h-full flex bg-mesh">
       {/* Game Setup Panel */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
+      <div className="w-80 modern-card border-r border-gray-200 flex flex-col">
+        {/* Connection Status */}
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex items-center space-x-2 mb-4">
+            <div className={`w-3 h-3 rounded-full ${
+              isConnectedToServer ? 'bg-green-400 animate-pulse' : 'bg-red-400'
+            }`}></div>
+            <span className="text-sm font-medium">
+              {isConnectedToServer ? 'Server Connected' : 'Server Offline'}
+            </span>
+          </div>
+          
+          {serverError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-red-800">{serverError}</p>
+            </div>
+          )}
+          
+          {isSearchingForGame && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <p className="text-sm text-blue-800">Looking for opponent...</p>
+              </div>
+            </div>
+          )}
+          
+          {opponent && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-green-800">
+                Playing against: <strong>{opponent.name}</strong> (ELO: {opponent.elo})
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Game Mode Selection */}
         <div className="p-6 border-b border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Game Setup</h3>
@@ -60,7 +187,8 @@ const PlayPage = () => {
               <button
                 key={mode.id}
                 onClick={() => setGameMode(mode.id)}
-                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                disabled={mode.id === 'multiplayer' && !isConnectedToServer}
+                className={`w-full text-left p-3 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   gameMode === mode.id
                     ? 'bg-blue-50 border-blue-200 text-blue-900'
                     : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
@@ -68,6 +196,9 @@ const PlayPage = () => {
               >
                 <div className="font-medium">{mode.label}</div>
                 <div className="text-sm opacity-75">{mode.description}</div>
+                {mode.id === 'multiplayer' && !isConnectedToServer && (
+                  <div className="text-xs text-red-600 mt-1">Server required</div>
+                )}
               </button>
             ))}
           </div>
@@ -109,16 +240,19 @@ const PlayPage = () => {
           <div className="space-y-3">
             <button
               onClick={handleNewGame}
-              className="w-full flex items-center space-x-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={isSearchingForGame}
+              className="w-full flex items-center space-x-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Square className="h-5 w-5" />
-              <span className="font-medium">New Game</span>
+              <span className="font-medium">
+                {isSearchingForGame ? 'Searching...' : 'New Game'}
+              </span>
             </button>
             
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={handleUndoMove}
-                disabled={moveCount === 0}
+                disabled={moveCount === 0 || chessSocketService.isInGame()}
                 className="flex items-center justify-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <RotateCcw className="h-4 w-4" />
@@ -134,9 +268,20 @@ const PlayPage = () => {
               </button>
             </div>
 
+            {chessSocketService.isInGame() && (
+              <button
+                onClick={handleResign}
+                className="w-full flex items-center space-x-3 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <Flag className="h-5 w-5" />
+                <span className="font-medium">Resign</span>
+              </button>
+            )}
+
             <button
               onClick={() => setIsPaused(!isPaused)}
-              className="w-full flex items-center space-x-3 px-4 py-3 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition-colors"
+              disabled={chessSocketService.isInGame()}
+              className="w-full flex items-center space-x-3 px-4 py-3 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
               <span className="font-medium">{isPaused ? 'Resume' : 'Pause'}</span>
@@ -175,6 +320,15 @@ const PlayPage = () => {
                 <span className="font-medium text-gray-900">{aiLevels[aiLevel - 1]?.name}</span>
               </div>
             )}
+
+            {chessSocketService.isInGame() && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Game ID</span>
+                <span className="font-mono text-xs text-gray-500">
+                  {chessSocketService.getGameId()?.slice(0, 8)}...
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Game Timer */}
@@ -194,11 +348,12 @@ const PlayPage = () => {
       {/* Main Game Area */}
       <div className="flex-1 flex flex-col">
         {/* Game Header */}
-        <div className="bg-white border-b border-gray-200 p-4">
+        <div className="modern-card border-b border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
-                {gameMode === 'ai' ? `Playing vs AI Level ${aiLevel}` : 'Chess Game'}
+                {gameMode === 'ai' ? `Playing vs AI Level ${aiLevel}` : 
+                 opponent ? `Playing vs ${opponent.name}` : 'Chess Game'}
               </h2>
               <p className="text-gray-600">
                 {isGameOver ? gameResult : `Move ${Math.ceil(moveCount / 2)} - ${playerColor === 'white' ? 'White' : 'Black'} to move`}
@@ -209,9 +364,14 @@ const PlayPage = () => {
               <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
                 <Settings className="h-5 w-5" />
               </button>
-              <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <Flag className="h-5 w-5" />
-              </button>
+              {chessSocketService.isInGame() && (
+                <button 
+                  onClick={handleResign}
+                  className="p-2 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg transition-colors"
+                >
+                  <Flag className="h-5 w-5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -224,7 +384,7 @@ const PlayPage = () => {
             {/* Game Over Overlay */}
             {isGameOver && (
               <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-                <div className="bg-white p-8 rounded-xl shadow-xl text-center max-w-sm">
+                <div className="modern-card p-8 rounded-xl shadow-xl text-center max-w-sm">
                   <h3 className="text-2xl font-bold text-gray-900 mb-4">Game Over!</h3>
                   <p className="text-gray-600 mb-6">{gameResult}</p>
                   <div className="space-y-3">
@@ -245,7 +405,7 @@ const PlayPage = () => {
             {/* Pause Overlay */}
             {isPaused && !isGameOver && (
               <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center rounded-lg">
-                <div className="bg-white p-6 rounded-xl shadow-xl text-center">
+                <div className="modern-card p-6 rounded-xl shadow-xl text-center">
                   <Pause className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">Game Paused</h3>
                   <button
@@ -262,7 +422,7 @@ const PlayPage = () => {
       </div>
 
       {/* Move History Panel */}
-      <div className="w-80 bg-white border-l border-gray-200 p-6">
+      <div className="w-80 modern-card border-l border-gray-200 p-6">
         <h4 className="text-lg font-semibold text-gray-900 mb-4">Move History</h4>
         
         {history.length > 0 ? (
