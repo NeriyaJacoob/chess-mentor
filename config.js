@@ -1,4 +1,4 @@
-// config.js - תצורת פרויקט מרכזית
+// config.js - Global configuration for ChessMentor project
 const os = require('os');
 const path = require('path');
 

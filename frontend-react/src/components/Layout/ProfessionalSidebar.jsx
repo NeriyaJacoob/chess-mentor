@@ -1,4 +1,5 @@
 // src/components/Layout/ProfessionalSidebar.jsx
+// Sidebar navigation links and actions
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';

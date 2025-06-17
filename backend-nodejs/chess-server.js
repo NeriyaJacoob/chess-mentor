@@ -1,3 +1,7 @@
+/**
+ * ChessMentor WebSocket Chess server
+ * Manages realtime multiplayer and AI games
+ */
 // backend-nodejs/chess-server.js
 const express = require('express');
 const http = require('http');
@@ -96,6 +100,11 @@ class ChessServer {
     });
   }
 
+  // Initialize a game against the Stockfish AI
+  // Steps:
+  // 1. Create a new Chess.js board instance
+  // 2. Store a Game object with player on white and the AI on black
+  // 3. Join the player to a Socket.IO room and emit the start event
   startAIGame(socket, player) {
     const gameId = this.generateGameId();
     const game = new Chess();
@@ -127,6 +136,7 @@ class ChessServer {
     });
   }
 
+  // Match players of similar rating for multiplayer
   findMultiplayerGame(socket, player) {
     // Simple matchmaking by ELO range
     const eloDiff = 200;
@@ -155,6 +165,7 @@ class ChessServer {
     }
   }
 
+  // Initialize a game between two human players
   startMultiplayerGame(socket, player1, player2) {
     const gameId = this.generateGameId();
     const game = new Chess();
@@ -206,6 +217,12 @@ class ChessServer {
     });
   }
 
+  // Validate and broadcast player move
+  // Steps:
+  // 1. Ensure player is in an active game and it's their turn
+  // 2. Use chess.js to attempt the move
+  // 3. Broadcast successful moves to all clients in the game
+  // 4. If playing vs AI, let Stockfish respond
   handleMove(socket, data) {
     const player = this.players.get(socket.id);
     if (!player?.isInGame) return;
@@ -246,14 +263,16 @@ class ChessServer {
     }
   }
 
-    // החלף ב-makeAIMove:
-    makeAIMove(gameId) {
+  // Let Stockfish engine play a move
+  // (simplified placeholder implementation)
+  makeAIMove(gameId) {
     const stockfish = spawn('path/to/stockfish.exe');
     stockfish.stdin.write(`position fen ${game.board.fen()}\n`);
     stockfish.stdin.write('go depth 10\n');
-    // handle stockfish response...
-    }
+    // TODO: parse engine output and push move to board
+  }
 
+  // Relay chat messages between players
   handleChatMessage(socket, data) {
     const player = this.players.get(socket.id);
     if (!player?.isInGame) return;
@@ -271,6 +290,7 @@ class ChessServer {
     this.io.to(player.gameId).emit('chat-message', message);
   }
 
+  // Resign the current game and declare winner
   handleResignation(socket) {
     const player = this.players.get(socket.id);
     if (!player?.isInGame) return;
@@ -281,6 +301,7 @@ class ChessServer {
     this.endGame(player.gameId, `${winner} wins by resignation`);
   }
 
+  // Cleanup after player disconnects
   handleDisconnect(socket) {
     const player = this.players.get(socket.id);
     if (!player) return;
@@ -313,6 +334,7 @@ class ChessServer {
     this.players.delete(socket.id);
   }
 
+  // Finalize game and notify players
   endGame(gameId, result) {
     const game = this.games.get(gameId);
     if (!game) return;
@@ -344,6 +366,7 @@ class ChessServer {
     }, 60000);
   }
 
+  // Translate board state to human-readable result
   getGameResult(board) {
     if (board.isCheckmate()) {
       return board.turn() === 'w' ? 'Black wins by checkmate' : 'White wins by checkmate';
@@ -357,16 +380,19 @@ class ChessServer {
     return 'Game over';
   }
 
+  // Determine a player's color by id
   getPlayerColor(gameId, playerId) {
     const game = this.games.get(gameId);
     if (!game) return null;
     return game.players.white.id === playerId ? 'white' : 'black';
   }
 
+  // Generate a short random game identifier
   generateGameId() {
     return 'game_' + Math.random().toString(36).substring(2, 15);
   }
 
+  // Begin listening for socket connections
   start() {
     this.server.listen(this.port, () => {
       console.log(`🚀 Chess Server running on port ${this.port}`);

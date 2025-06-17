@@ -1,9 +1,13 @@
+"""
+AI coaching utilities for explaining moves and positions
+"""
 import chess
 import chess.engine
 from typing import Dict, List, Optional, Tuple
 import re
 
 class ChessCoach:
+    """Provide high level analysis using Stockfish"""
     def __init__(self, engine: chess.engine.SimpleEngine):
         self.engine = engine
 

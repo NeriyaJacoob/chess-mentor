@@ -1,4 +1,5 @@
 // frontend-react/src/utils/soundManager.js
+// Handles loading and playing UI sounds
 class SoundManager {
   constructor() {
     this.sounds = new Map();

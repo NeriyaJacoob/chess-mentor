@@ -1,5 +1,6 @@
 // src/store/store.js - תיקון Redux Store
 import { configureStore } from '@reduxjs/toolkit';
+// Creates the global Redux store
 
 // Import reducers with error handling
 let gameReducer, authReducer, coachReducer;

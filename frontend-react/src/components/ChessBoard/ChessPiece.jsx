@@ -1,4 +1,5 @@
 // src/components/ChessBoard/ChessPiece.jsx - גרסה מאוחדת
+// Display a chess piece with drag animations
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 

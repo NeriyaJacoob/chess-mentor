@@ -1,4 +1,4 @@
-// src/pages/SettingsPage.jsx
+// SettingsPage - configure app options
 import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { setPieceStyle, setBoardTheme } from '../store/slices/gameSlice';

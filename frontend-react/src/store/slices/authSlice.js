@@ -1,4 +1,5 @@
 // src/store/slices/authSlice.js
+// Manages OpenAI API authentication state
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 

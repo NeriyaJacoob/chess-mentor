@@ -1,3 +1,7 @@
+/**
+ * ChessMentor Node.js API server
+ * Handles authentication and OpenAI integration
+ */
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -32,6 +36,7 @@ app.use(express.urlencoded({ extended: true }));
 const userSessions = new Map();
 
 // Routes
+// Returns application status
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -41,6 +46,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // OpenAI API Key management
+// Validates user key and stores in memory
 app.post('/api/auth/openai', async (req, res) => {
   try {
     const { apiKey } = req.body;
@@ -88,6 +94,7 @@ app.post('/api/auth/openai', async (req, res) => {
 });
 
 // Chess GPT Coach endpoint
+// Sends chat messages to OpenAI for analysis
 app.post('/api/chess/coach', async (req, res) => {
   try {
     const { sessionId, message, gameState, analysisType } = req.body;
@@ -142,6 +149,7 @@ app.post('/api/chess/coach', async (req, res) => {
 });
 
 // Game state management
+// Receives player moves and returns new board state
 app.post('/api/chess/move', (req, res) => {
   try {
     const { move, gameState } = req.body;
@@ -161,6 +169,7 @@ app.post('/api/chess/move', (req, res) => {
 });
 
 // Logout endpoint
+// Clears session from memory
 app.post('/api/auth/logout', (req, res) => {
   try {
     const { sessionId } = req.body;
@@ -177,12 +186,14 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // Error handling middleware
+// Catch-all for unexpected errors
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
 // 404 handler
+// Handles unknown routes
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });

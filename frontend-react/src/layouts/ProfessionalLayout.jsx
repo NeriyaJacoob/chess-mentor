@@ -1,4 +1,5 @@
 // frontend-react/src/layouts/ProfessionalLayout.jsx
+// Layout with sidebar and top bar
 import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useSelector } from 'react-redux';

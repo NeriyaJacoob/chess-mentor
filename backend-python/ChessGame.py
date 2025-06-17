@@ -1,9 +1,13 @@
+"""
+Game logic wrapper around python-chess and Stockfish
+"""
 import chess
 import chess.engine
 import time
 from typing import Optional, List, Dict
 
 class ChessGame:
+    """Manage a single chess match and interface with Stockfish"""
     def __init__(self, stockfish_path: str, elo_level: int = 1500):
         self.board = chess.Board()
         self.history: List[chess.Move] = []
@@ -29,7 +33,14 @@ class ChessGame:
             self.engine = None
 
     def player_move(self, move_uci: str) -> bool:
-        """Make a player move if it's legal"""
+        """Execute a player move if legal.
+
+        Steps:
+        1. Convert UCI string to a Move object and verify legality.
+        2. Push the move on the board and record timestamp.
+        3. Optionally query Stockfish for evaluation after the move.
+        4. Return True if the move was applied.
+        """
         try:
             move = chess.Move.from_uci(move_uci)
             if move in self.board.legal_moves:
@@ -55,7 +66,13 @@ class ChessGame:
             return False
 
     def computer_move(self, thinking_time: float = 0.5) -> Optional[chess.Move]:
-        """Stockfish makes a move against player"""
+        """Let Stockfish play a move.
+
+        The engine is given a time limit, then the returned move is
+        pushed to the board and recorded in the history along with an
+        evaluation of the resulting position.
+        Returns the move object or ``None`` if no engine is available.
+        """
         if not self.engine or self.board.is_game_over():
             return None
         

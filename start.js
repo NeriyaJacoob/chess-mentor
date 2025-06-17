@@ -1,5 +1,10 @@
 #!/usr/bin/env node
-
+// Launch all project services for development.
+//
+// This script orchestrates the Node.js API, Python WebSocket
+// server and React frontend. It checks dependencies, frees
+// required ports and spawns each process with nice coloured
+// logging for easy debugging.
 // start.js - סקריפט הפעלה מאוחד ונקי
 const { spawn, exec } = require('child_process');
 const fs = require('fs');

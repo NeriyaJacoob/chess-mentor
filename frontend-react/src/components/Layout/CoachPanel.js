@@ -1,4 +1,5 @@
 // src/components/Layout/CoachPanel.js
+// Container for chat sidebar
 import React from 'react';
 import CoachChat from '../Coach/CoachChat';
 

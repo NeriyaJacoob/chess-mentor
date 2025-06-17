@@ -1,4 +1,5 @@
 // src/components/ChessBoard/ChessSquare.jsx - גרסה מאוחדת
+// Single square on the chess board
 import React from 'react';
 import { motion } from 'framer-motion';
 

@@ -1,4 +1,5 @@
 // components/Game/GameInfo.js
+// Shows move history and captured pieces
 import React from 'react';
 import { useSelector } from 'react-redux';
 import { motion } from 'framer-motion';
