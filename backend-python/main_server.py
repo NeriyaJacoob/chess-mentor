@@ -1,9 +1,3 @@
-# backend-python/main_server.py
-"""
-ChessMentor Python Server מלא
-משלב WebSocket, OpenAI, Stockfish בשרת אחד
-"""
-
 import asyncio
 import json
 import uuid
@@ -33,8 +27,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Internal imports
-from ChessGame import ChessGame
-from ChessCoach import ChessCoach
+try:
+    from ChessGame import ChessGame
+    from ChessCoach import ChessCoach
+except ImportError:
+    print("⚠️ Warning: ChessGame or ChessCoach modules not found. Some features will be limited.")
+    ChessGame = None
+    ChessCoach = None
 
 @dataclass
 class Player:
@@ -44,31 +43,9 @@ class Player:
     elo: int = 1200
     is_in_game: bool = False
     game_id: Optional[str] = None
-    openai_key: Optional[str] = None
     session_id: Optional[str] = None
-    user_id: Optional[str] = None  # MongoDB user ID
+    user_id: Optional[str] = None
     is_guest: bool = True
-
-@dataclass 
-class UserProfile:
-    user_id: str
-    username: str
-    email: Optional[str]
-    elo_rating: int = 1200
-    games_played: int = 0
-    games_won: int = 0
-    created_at: datetime
-    last_active: datetime
-    preferences: Dict = None
-    
-    def __post_init__(self):
-        if self.preferences is None:
-            self.preferences = {
-                'theme': 'light',
-                'board_theme': 'classic',
-                'piece_style': 'classic',
-                'sound_enabled': True
-            }
 
 @dataclass
 class GameSession:
@@ -76,29 +53,48 @@ class GameSession:
     type: str  # 'ai' or 'multiplayer'
     white_player: Player
     black_player: Optional[Player]
-    chess_game: ChessGame
-    chess_coach: Optional[ChessCoach]
+    chess_game: Optional[Any]  # ChessGame instance
     start_time: float
-    status: str = 'active'  # 'active', 'finished'
+    status: str = 'active'
     chat_history: List[Dict] = None
+    fen: str = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+    move_history: List[str] = None
 
     def __post_init__(self):
         if self.chat_history is None:
             self.chat_history = []
+        if self.move_history is None:
+            self.move_history = []
 
 class ChessMentorServer:
-    """שרת מאסטר שמטפל בהכל - משחקים, OpenAI, ניתוח, MongoDB"""
+    """שרת מאסטר שמטפל בהכל - משחקים, OpenAI, ניתוח"""
     
-    def __init__(self, stockfish_path: str = None, mongo_uri: str = None):
-        self.app = FastAPI(title="ChessMentor Complete Server", version="2.0.0")
+    def __init__(self, stockfish_path: str = None):
+        self.app = FastAPI(title="ChessMentor Server", version="2.1.0")
         
-        # הגדרת נתיב Stockfish
-        self.stockfish_path = stockfish_path or os.getenv('STOCKFISH_PATH') or self._detect_stockfish_path()
+        # טעינת משתני סביבה
+        load_dotenv()
         
-        # MongoDB connection
-        self.mongo_uri = mongo_uri or os.getenv('MONGO_URI')
-        self.db_client = None
-        self.db = None
+        # הגדרת נתיב Stockfish - קודם מ-.env, אחר כך auto-detect
+        self.stockfish_path = (
+            stockfish_path or 
+            os.getenv('STOCKFISH_PATH') or 
+            self._detect_stockfish_path()
+        )
+        
+        # הגדרות שרת מ-.env
+        self.host = os.getenv('HOST', 'localhost')
+        self.port = int(os.getenv('PORT', 5001))
+        self.debug = os.getenv('DEBUG', 'True').lower() == 'true'
+        
+        # הגדרות CORS מ-.env
+        allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
+        
+        print(f"🔧 Loaded config:")
+        print(f"   Host: {self.host}:{self.port}")
+        print(f"   Debug: {self.debug}")
+        print(f"   Stockfish: {self.stockfish_path}")
+        print(f"   CORS Origins: {allowed_origins}")
         
         # אחסון נתונים
         self.games: Dict[str, GameSession] = {}
@@ -107,46 +103,8 @@ class ChessMentorServer:
         self.active_sessions: Dict[str, Dict] = {}  # לניהול מפתחות OpenAI
         
         # הגדרת האפליקציה
-        self.setup_app()
+        self.setup_app(allowed_origins)
         
-    async def connect_to_mongodb(self):
-        """חיבור ל-MongoDB"""
-        if not self.mongo_uri:
-            print("⚠️ MongoDB URI not provided. Running without database.")
-            return False
-            
-        try:
-            self.db_client = AsyncIOMotorClient(self.mongo_uri)
-            self.db = self.db_client.chessmentor
-            
-            # בדיקת חיבור
-            await self.db_client.admin.command('ping')
-            print("✅ Connected to MongoDB successfully")
-            
-            # יצירת אינדקסים
-            await self.create_indexes()
-            return True
-            
-        except ConnectionFailure as e:
-            print(f"❌ Failed to connect to MongoDB: {e}")
-            return False
-            
-    async def create_indexes(self):
-        """יצירת אינדקסים למסד הנתונים"""
-        if not self.db:
-            return
-            
-        # אינדקס למשתמשים
-        await self.db.users.create_index("username", unique=True)
-        await self.db.users.create_index("email", unique=True, sparse=True)
-        
-        # אינדקס למשחקים
-        await self.db.games.create_index("created_at")
-        await self.db.games.create_index("players.white_id")
-        await self.db.games.create_index("players.black_id")
-        
-        print("✅ Database indexes created")
-
     def _detect_stockfish_path(self) -> str:
         """זיהוי אוטומטי של נתיב Stockfish"""
         import platform
@@ -184,196 +142,65 @@ class ChessMentorServer:
         print("⚠️ Stockfish not found! Please install or specify path")
         return None
 
-    def setup_app(self):
+    def setup_app(self, allowed_origins):
         """הגדרת FastAPI עם כל הנתיבים"""
         
-        # CORS
+        # CORS עם הגדרות מ-.env + OPTIONS handler
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["http://localhost:3000"],
+            allow_origins=allowed_origins,
             allow_credentials=True,
-            allow_methods=["*"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             allow_headers=["*"],
         )
+        
+        # הוספת OPTIONS handler מפורש
+        @self.app.options("/{full_path:path}")
+        async def options_handler():
+            return JSONResponse(
+                content={},
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                }
+            )
 
         # בדיקת בריאות
         @self.app.get("/health")
         async def health_check():
-            db_status = "connected" if self.db else "disconnected"
             return {
                 "status": "OK",
-                "server": "ChessMentor Python Complete Server",
+                "server": "ChessMentor Python Server v2.1",
                 "active_games": len(self.games),
                 "connected_players": len(self.players),
                 "players_in_queue": len(self.waiting_queue),
                 "stockfish_available": bool(self.stockfish_path),
                 "stockfish_path": self.stockfish_path,
-                "database_status": db_status,
                 "timestamp": datetime.now().isoformat()
             }
 
-        # Authentication endpoints
-        @self.app.post("/api/auth/register")
-        async def register_user(request_data: dict):
-            """רישום משתמש חדש"""
-            try:
-                username = request_data.get('username')
-                email = request_data.get('email')
-                password = request_data.get('password')
-                
-                if not all([username, password]):
-                    raise HTTPException(status_code=400, detail="Username and password required")
-                
-                if not self.db:
-                    raise HTTPException(status_code=503, detail="Database not available")
-                
-                # בדיקה אם המשתמש קיים
-                existing = await self.db.users.find_one({"username": username})
-                if existing:
-                    raise HTTPException(status_code=409, detail="Username already exists")
-                
-                # הצפנת סיסמה
-                hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-                
-                # יצירת משתמש חדש
-                user_data = {
-                    "username": username,
-                    "email": email,
-                    "password": hashed_password,
-                    "elo_rating": 1200,
-                    "games_played": 0,
-                    "games_won": 0,
-                    "created_at": datetime.now(),
-                    "last_active": datetime.now(),
-                    "preferences": {
-                        "theme": "light",
-                        "board_theme": "classic", 
-                        "piece_style": "classic",
-                        "sound_enabled": True
-                    }
-                }
-                
-                result = await self.db.users.insert_one(user_data)
-                user_id = str(result.inserted_id)
-                
-                return JSONResponse({
-                    "success": True,
-                    "user_id": user_id,
-                    "username": username,
-                    "message": "User registered successfully"
-                })
-                
-            except HTTPException:
-                raise
-            except Exception as e:
-                print(f"Registration error: {e}")
-                raise HTTPException(status_code=500, detail="Registration failed")
-
-        @self.app.post("/api/auth/login")
-        async def login_user(request_data: dict):
-            """התחברות משתמש"""
-            try:
-                username = request_data.get('username')
-                password = request_data.get('password')
-                
-                if not all([username, password]):
-                    raise HTTPException(status_code=400, detail="Username and password required")
-                
-                if not self.db:
-                    raise HTTPException(status_code=503, detail="Database not available")
-                
-                # חיפוש משתמש
-                user = await self.db.users.find_one({"username": username})
-                if not user:
-                    raise HTTPException(status_code=401, detail="Invalid credentials")
-                
-                # בדיקת סיסמה
-                if not bcrypt.checkpw(password.encode('utf-8'), user['password']):
-                    raise HTTPException(status_code=401, detail="Invalid credentials")
-                
-                # עדכון זמן פעילות אחרון
-                await self.db.users.update_one(
-                    {"_id": user["_id"]},
-                    {"$set": {"last_active": datetime.now()}}
-                )
-                
-                # יצירת session
-                session_id = str(uuid.uuid4())
-                session_data = {
-                    "user_id": str(user["_id"]),
-                    "username": user["username"],
-                    "elo": user.get("elo_rating", 1200),
-                    "timestamp": time.time()
-                }
-                
-                self.active_sessions[session_id] = session_data
-                
-                return JSONResponse({
-                    "success": True,
-                    "session_id": session_id,
-                    "user": {
-                        "user_id": str(user["_id"]),
-                        "username": user["username"],
-                        "elo_rating": user.get("elo_rating", 1200),
-                        "games_played": user.get("games_played", 0),
-                        "games_won": user.get("games_won", 0),
-                        "preferences": user.get("preferences", {})
-                    }
-                })
-                
-            except HTTPException:
-                raise
-            except Exception as e:
-                print(f"Login error: {e}")
-                raise HTTPException(status_code=500, detail="Login failed")
-
-        @self.app.post("/api/auth/guest")
-        async def guest_login(request_data: dict):
-            """התחברות כאורח"""
-            try:
-                name = request_data.get('name', f'Guest_{uuid.uuid4().hex[:8]}')
-                
-                session_id = str(uuid.uuid4())
-                session_data = {
-                    "user_id": None,
-                    "username": name,
-                    "elo": 1200,
-                    "is_guest": True,
-                    "timestamp": time.time()
-                }
-                
-                self.active_sessions[session_id] = session_data
-                
-                return JSONResponse({
-                    "success": True,
-                    "session_id": session_id,
-                    "user": {
-                        "user_id": None,
-                        "username": name,
-                        "elo_rating": 1200,
-                        "is_guest": True
-                    }
-                })
-                
-            except Exception as e:
-                print(f"Guest login error: {e}")
-                raise HTTPException(status_code=500, detail="Guest login failed")
-
-        # נתיבי OpenAI API
-        @self.app.post("/api/auth/openai")
+        # נתיבי OpenAI API - תיקון לנתיבים שהפרונט מצפה להם
+        @self.app.post("/auth/openai")  # הוסרנו /api
         async def authenticate_openai(request_data: dict):
             """אימות מפתח OpenAI"""
             try:
+                print(f"🔍 Received OpenAI auth request: {request_data.keys()}")
+                
                 api_key = request_data.get('apiKey')
                 if not api_key:
+                    print("❌ No API key provided")
                     raise HTTPException(status_code=400, detail="API key is required")
 
-                # בדיקת תקינות המפתח
-                client = OpenAI(api_key=api_key)
-                
+                print(f"🔑 Testing API key: {api_key[:10]}...")
+
+                # בדיקת תקינות המפתח עם try-catch מפורט
                 try:
-                    # בדיקה קלה
-                    models = await asyncio.to_thread(client.models.list)
+                    # יצירת client בלי פרמטרים מיותרים
+                    client = OpenAI(api_key=api_key)
+                    
+                    # בדיקה קלה - רשימת מודלים
+                    models = client.models.list()
                     
                     # יצירת session ID
                     session_id = str(uuid.uuid4())
@@ -388,22 +215,74 @@ class ChessMentorServer:
                     # ניקוי סשנים ישנים
                     await self._cleanup_old_sessions()
                     
-                    return JSONResponse({
-                        'success': True,
-                        'sessionId': session_id,
-                        'message': 'API key validated successfully'
-                    })
+                    print(f"✅ OpenAI authentication successful for session {session_id}")
                     
-                except Exception as e:
+                    return JSONResponse(
+                        content={
+                            'success': True,
+                            'sessionId': session_id,
+                            'message': 'API key validated successfully'
+                        },
+                        headers={
+                            "Content-Type": "application/json",
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Methods": "POST, OPTIONS",
+                            "Access-Control-Allow-Headers": "*"
+                        }
+                    )
+                    
+                except openai.AuthenticationError:
+                    print("❌ OpenAI authentication failed - invalid API key")
                     raise HTTPException(status_code=401, detail="Invalid OpenAI API key")
+                except openai.RateLimitError:
+                    print("❌ OpenAI rate limit exceeded")
+                    raise HTTPException(status_code=429, detail="OpenAI rate limit exceeded")
+                except openai.APIConnectionError:
+                    print("❌ OpenAI connection error")
+                    raise HTTPException(status_code=503, detail="Cannot connect to OpenAI")
+                except Exception as e:
+                    print(f"❌ OpenAI validation error: {type(e).__name__}: {str(e)}")
+                    if "proxies" in str(e):
+                        # נסה ליצור client פשוט יותר
+                        try:
+                            import openai as openai_module
+                            openai_module.api_key = api_key
+                            
+                            # בדיקה באמצעות הספרייה הישנה
+                            response = openai_module.Model.list()
+                            
+                            session_id = str(uuid.uuid4())
+                            self.active_sessions[session_id] = {
+                                'api_key': api_key,
+                                'timestamp': time.time(),
+                                'client': None,  # נשמור None ונשתמש בגישה הישנה
+                                'legacy': True
+                            }
+                            
+                            return JSONResponse(
+                                content={
+                                    'success': True,
+                                    'sessionId': session_id,
+                                    'message': 'API key validated successfully (legacy mode)'
+                                },
+                                headers={
+                                    "Content-Type": "application/json",
+                                    "Access-Control-Allow-Origin": "*"
+                                }
+                            )
+                        except Exception as legacy_error:
+                            print(f"❌ Legacy OpenAI validation also failed: {legacy_error}")
+                            raise HTTPException(status_code=401, detail="Invalid OpenAI API key")
+                    else:
+                        raise HTTPException(status_code=401, detail="Invalid OpenAI API key")
                     
             except HTTPException:
                 raise
             except Exception as e:
-                print(f"Error validating API key: {e}")
+                print(f"❌ Unexpected error in OpenAI auth: {e}")
                 raise HTTPException(status_code=500, detail="Internal server error")
 
-        @self.app.post("/api/chess/coach")
+        @self.app.post("/chess/coach")  # הוסרנו /api
         async def chess_coach_chat(request_data: dict):
             """צ'אט עם המאמן AI"""
             try:
@@ -416,7 +295,6 @@ class ChessMentorServer:
                     raise HTTPException(status_code=401, detail="Invalid or expired session")
                 
                 session = self.active_sessions[session_id]
-                client = session['client']
                 
                 # בניית prompt לפי סוג הניתוח
                 system_prompt = self._build_coach_prompt(analysis_type)
@@ -426,28 +304,62 @@ class ChessMentorServer:
                     {"role": "user", "content": f"Game State (FEN): {game_state}\n\nQuestion: {message}"}
                 ]
                 
-                # קריאה ל-OpenAI
-                response = await asyncio.to_thread(
-                    client.chat.completions.create,
-                    model="gpt-4",
-                    messages=messages,
-                    max_tokens=500,
-                    temperature=0.7
-                )
-                
-                return JSONResponse({
-                    'success': True,
-                    'response': response.choices[0].message.content,
-                    'timestamp': datetime.now().isoformat()
-                })
+                # קריאה ל-OpenAI - תמיכה במצב legacy ומצב חדש
+                try:
+                    if session.get('legacy', False):
+                        # מצב legacy - השתמש בגישה הישנה
+                        import openai as openai_module
+                        openai_module.api_key = session['api_key']
+                        
+                        response = openai_module.ChatCompletion.create(
+                            model="gpt-3.5-turbo",
+                            messages=messages,
+                            max_tokens=500,
+                            temperature=0.7
+                        )
+                        
+                        response_text = response.choices[0].message.content
+                        
+                    else:
+                        # מצב חדש - client object
+                        client = session['client']
+                        response = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=messages,
+                            max_tokens=500,
+                            temperature=0.7
+                        )
+                        
+                        response_text = response.choices[0].message.content
+                    
+                    print(f"✅ Coach response generated for session {session_id}")
+                    
+                    return JSONResponse({
+                        'success': True,
+                        'response': response_text,
+                        'timestamp': datetime.now().isoformat()
+                    })
+                    
+                except Exception as openai_error:
+                    print(f"❌ OpenAI API error: {openai_error}")
+                    raise HTTPException(status_code=503, detail="OpenAI service unavailable")
                 
             except HTTPException:
                 raise
             except Exception as e:
-                print(f"Error calling OpenAI: {e}")
+                print(f"❌ Coach endpoint error: {e}")
                 raise HTTPException(status_code=500, detail="Failed to get response from chess coach")
 
-        @self.app.post("/api/auth/logout")
+        @self.app.get("/auth/status")
+        async def auth_status():
+            """בדיקת סטטוס authentication"""
+            return JSONResponse({
+                "active_sessions": len(self.active_sessions),
+                "session_ids": list(self.active_sessions.keys()),
+                "timestamp": datetime.now().isoformat()
+            })
+
+        @self.app.post("/auth/logout")  # הוסרנו /api
         async def logout(request_data: dict):
             """התנתקות"""
             try:
@@ -463,7 +375,7 @@ class ChessMentorServer:
                 print(f"Error during logout: {e}")
                 raise HTTPException(status_code=500, detail="Failed to logout")
 
-        @self.app.get("/api/games")
+        @self.app.get("/games")  # הוסרנו /api
         async def get_active_games():
             """רשימת משחקים פעילים"""
             return {
@@ -476,7 +388,7 @@ class ChessMentorServer:
                             "black": game.black_player.name if game.black_player else "AI"
                         },
                         "status": game.status,
-                        "move_count": len(game.chess_game.history)
+                        "move_count": len(game.move_history)
                     }
                     for game in self.games.values()
                 ]
@@ -600,13 +512,13 @@ class ChessMentorServer:
         """התחלת משחק נגד AI"""
         game_id = str(uuid.uuid4())
         
-        # יצירת משחק
-        chess_game = ChessGame(self.stockfish_path, elo_level=1500)
-        chess_coach = ChessCoach(chess_game.engine) if chess_game.engine else None
-        
-        if not chess_game.engine:
-            await self.send_websocket_error(player.websocket, "Stockfish engine not available")
-            return
+        # יצירת משחק - עם fallback אם ChessGame לא זמין
+        chess_game = None
+        if ChessGame and self.stockfish_path:
+            try:
+                chess_game = ChessGame(self.stockfish_path, elo_level=1500)
+            except Exception as e:
+                print(f"⚠️ Failed to initialize ChessGame: {e}")
         
         game_session = GameSession(
             id=game_id,
@@ -614,7 +526,6 @@ class ChessMentorServer:
             white_player=player,
             black_player=None,
             chess_game=chess_game,
-            chess_coach=chess_coach,
             start_time=time.time()
         )
         
@@ -624,15 +535,35 @@ class ChessMentorServer:
         
         print(f"🤖 Started AI game {game_id} for {player.name}")
         
+        # מידע על המיקום הראשוני
+        position_info = {
+            'fen': game_session.fen,
+            'turn': 'white',
+            'legal_moves': self._get_legal_moves_from_fen(game_session.fen),
+            'move_count': 0,
+            'is_check': False,
+            'is_checkmate': False,
+            'is_stalemate': False,
+            'is_game_over': False
+        }
+        
         await self.send_websocket_message(player.websocket, {
             'type': 'game_start',
             'data': {
                 'game_id': game_id,
                 'color': 'white',
                 'opponent': {'name': 'ChessMentor AI', 'elo': 1500},
-                'position': chess_game.get_position_info()
+                'position': position_info
             }
         })
+
+    def _get_legal_moves_from_fen(self, fen: str) -> List[str]:
+        """קבלת מהלכים חוקיים מ-FEN"""
+        try:
+            board = chess.Board(fen)
+            return [move.uci() for move in board.legal_moves]
+        except:
+            return []
 
     async def find_multiplayer_game(self, player: Player):
         """חיפוש משחק מולטיפלייר"""
@@ -652,15 +583,6 @@ class ChessMentorServer:
                 'type': 'searching',
                 'data': {'message': f'Looking for opponent (ELO ~{player.elo})...'}
             })
-            
-            # timeout אחרי 30 שניות
-            await asyncio.sleep(30)
-            if player in self.waiting_queue:
-                self.waiting_queue.remove(player)
-                await self.send_websocket_message(player.websocket, {
-                    'type': 'search_timeout',
-                    'data': {'message': 'No opponent found. Try AI mode?'}
-                })
 
     async def start_multiplayer_game(self, player1: Player, player2: Player):
         """התחלת משחק בין שני שחקנים"""
@@ -673,8 +595,12 @@ class ChessMentorServer:
         white_player = player1 if is_player1_white else player2
         black_player = player2 if is_player1_white else player1
         
-        chess_game = ChessGame(self.stockfish_path)
-        chess_coach = ChessCoach(chess_game.engine) if chess_game.engine else None
+        chess_game = None
+        if ChessGame:
+            try:
+                chess_game = ChessGame(self.stockfish_path)
+            except Exception as e:
+                print(f"⚠️ Failed to initialize ChessGame: {e}")
         
         game_session = GameSession(
             id=game_id,
@@ -682,7 +608,6 @@ class ChessMentorServer:
             white_player=white_player,
             black_player=black_player,
             chess_game=chess_game,
-            chess_coach=chess_coach,
             start_time=time.time()
         )
         
@@ -695,6 +620,17 @@ class ChessMentorServer:
         
         print(f"👥 Started multiplayer game {game_id}: {white_player.name} vs {black_player.name}")
         
+        position_info = {
+            'fen': game_session.fen,
+            'turn': 'white',
+            'legal_moves': self._get_legal_moves_from_fen(game_session.fen),
+            'move_count': 0,
+            'is_check': False,
+            'is_checkmate': False,
+            'is_stalemate': False,
+            'is_game_over': False
+        }
+        
         # הודעה לשני השחקנים
         await self.send_websocket_message(player1.websocket, {
             'type': 'game_start',
@@ -702,7 +638,7 @@ class ChessMentorServer:
                 'game_id': game_id,
                 'color': 'white' if is_player1_white else 'black',
                 'opponent': {'name': player2.name, 'elo': player2.elo},
-                'position': chess_game.get_position_info()
+                'position': position_info
             }
         })
         
@@ -712,7 +648,7 @@ class ChessMentorServer:
                 'game_id': game_id,
                 'color': 'black' if is_player1_white else 'white',
                 'opponent': {'name': player1.name, 'elo': player1.elo},
-                'position': chess_game.get_position_info()
+                'position': position_info
             }
         })
 
@@ -726,45 +662,78 @@ class ChessMentorServer:
         if not game or game.status != 'active':
             return
         
-        # קביעת צבע השחקן
-        player_color = 'white' if game.white_player.id == player_id else 'black'
-        current_turn = 'white' if game.chess_game.board.turn else 'black'
-        
-        if current_turn != player_color:
-            await self.send_websocket_error(websocket, "Not your turn")
-            return
-        
-        # ביצוע המהלך
         move_uci = data.get('move')
         if not move_uci:
             await self.send_websocket_error(websocket, "Move required")
             return
         
-        success = game.chess_game.player_move(move_uci)
-        if not success:
-            await self.send_websocket_error(websocket, f"Invalid move: {move_uci}")
-            return
-        
-        print(f"♟️ {player.name} played {move_uci}")
-        
-        # שידור המהלך לכל השחקנים במשחק
-        await self.broadcast_to_game(game.id, {
-            'type': 'move_made',
-            'data': {
-                'move': move_uci,
-                'player': player.name,
-                'position': game.chess_game.get_position_info()
+        # בדיקת תקינות המהלך
+        try:
+            board = chess.Board(game.fen)
+            move = chess.Move.from_uci(move_uci)
+            
+            if move not in board.legal_moves:
+                await self.send_websocket_error(websocket, f"Invalid move: {move_uci}")
+                return
+            
+            # ביצוע המהלך
+            board.push(move)
+            game.fen = board.fen()
+            game.move_history.append(move_uci)
+            
+            print(f"♟️ {player.name} played {move_uci}")
+            
+            # מידע מעודכן על המיקום
+            position_info = {
+                'fen': game.fen,
+                'turn': 'white' if board.turn else 'black',
+                'legal_moves': [m.uci() for m in board.legal_moves],
+                'move_count': len(game.move_history),
+                'is_check': board.is_check(),
+                'is_checkmate': board.is_checkmate(),
+                'is_stalemate': board.is_stalemate(),
+                'is_game_over': board.is_game_over()
             }
-        })
-        
-        # בדיקת סיום משחק
-        if game.chess_game.is_game_over():
-            await self.end_game(game.id)
-            return
-        
-        # תגובת AI במשחקי AI
-        if game.type == 'ai' and current_turn == 'white':
-            await self.make_ai_move(game.id)
+            
+            # שידור המהלך לכל השחקנים במשחק
+            await self.broadcast_to_game(game.id, {
+                'type': 'move_made',
+                'data': {
+                    'move': move_uci,
+                    'player': player.name,
+                    'position': position_info
+                }
+            })
+            
+            # בדיקת סיום משחק
+            if board.is_game_over():
+                result = self._get_game_result(board)
+                await self.end_game(game.id, result)
+                return
+            
+            # תגובת AI במשחקי AI
+            if game.type == 'ai' and not board.turn:  # תור השחור (AI)
+                await self.make_ai_move(game.id)
+                
+        except Exception as e:
+            print(f"Move error: {e}")
+            await self.send_websocket_error(websocket, f"Move failed: {e}")
+
+    def _get_game_result(self, board: chess.Board) -> str:
+        """קביעת תוצאת המשחק"""
+        if board.is_checkmate():
+            winner = "Black" if board.turn else "White"
+            return f"{winner} wins by checkmate"
+        elif board.is_stalemate():
+            return "Draw by stalemate"
+        elif board.is_insufficient_material():
+            return "Draw by insufficient material"
+        elif board.is_seventyfive_moves():
+            return "Draw by 75-move rule"
+        elif board.is_fivefold_repetition():
+            return "Draw by repetition"
+        else:
+            return "Game in progress"
 
     async def make_ai_move(self, game_id: str):
         """מהלך AI"""
@@ -777,22 +746,66 @@ class ChessMentorServer:
         # השהיה קטנה לריאליזם
         await asyncio.sleep(0.5)
         
-        ai_move = game.chess_game.computer_move(thinking_time=1.0)
-        if ai_move:
-            print(f"🤖 AI played {ai_move.uci()}")
+        try:
+            board = chess.Board(game.fen)
+            
+            # אם יש מנוע חזק - השתמש בו
+            if game.chess_game and game.chess_game.engine:
+                ai_move = game.chess_game.computer_move(thinking_time=1.0)
+                if ai_move:
+                    move_uci = ai_move.uci()
+                else:
+                    # fallback למהלך אקראי
+                    legal_moves = list(board.legal_moves)
+                    if legal_moves:
+                        import random
+                        move_uci = random.choice(legal_moves).uci()
+                    else:
+                        return
+            else:
+                # fallback למהלך אקראי
+                legal_moves = list(board.legal_moves)
+                if legal_moves:
+                    import random
+                    move_uci = random.choice(legal_moves).uci()
+                else:
+                    return
+            
+            # ביצוע המהלך
+            move = chess.Move.from_uci(move_uci)
+            board.push(move)
+            game.fen = board.fen()
+            game.move_history.append(move_uci)
+            
+            print(f"🤖 AI played {move_uci}")
+            
+            position_info = {
+                'fen': game.fen,
+                'turn': 'white' if board.turn else 'black',
+                'legal_moves': [m.uci() for m in board.legal_moves],
+                'move_count': len(game.move_history),
+                'is_check': board.is_check(),
+                'is_checkmate': board.is_checkmate(),
+                'is_stalemate': board.is_stalemate(),
+                'is_game_over': board.is_game_over()
+            }
             
             await self.broadcast_to_game(game_id, {
                 'type': 'move_made',
                 'data': {
-                    'move': ai_move.uci(),
+                    'move': move_uci,
                     'player': 'ChessMentor AI',
-                    'position': game.chess_game.get_position_info()
+                    'position': position_info
                 }
             })
             
             # בדיקת סיום משחק
-            if game.chess_game.is_game_over():
-                await self.end_game(game_id)
+            if board.is_game_over():
+                result = self._get_game_result(board)
+                await self.end_game(game_id, result)
+                
+        except Exception as e:
+            print(f"AI move error: {e}")
 
     async def handle_analyze_move(self, websocket: WebSocket, player_id: str, data: dict):
         """ניתוח מהלך"""
@@ -801,8 +814,7 @@ class ChessMentorServer:
             return
         
         game = self.games.get(player.game_id)
-        if not game or not game.chess_coach:
-            await self.send_websocket_error(websocket, "Analysis not available")
+        if not game:
             return
         
         move_uci = data.get('move')
@@ -810,19 +822,39 @@ class ChessMentorServer:
             await self.send_websocket_error(websocket, "Move required for analysis")
             return
         
+        # ניתוח פשוט
         try:
+            board = chess.Board(game.fen)
             move = chess.Move.from_uci(move_uci)
-            explanation = game.chess_coach.explain_move(game.chess_game.board, move, player.elo)
-            analysis = game.chess_coach.analyze_position(game.chess_game.board)
             
-            await self.send_websocket_message(websocket, {
-                'type': 'move_analysis',
-                'data': {
-                    'move': move_uci,
-                    'explanation': explanation,
-                    'analysis': analysis
-                }
-            })
+            if move in board.legal_moves:
+                analysis = f"Move {move_uci} is legal. "
+                
+                # בדיקות בסיסיות
+                if board.is_capture(move):
+                    analysis += "This is a capture. "
+                if board.gives_check(move):
+                    analysis += "This move gives check. "
+                
+                # השתמש במאמן אם זמין
+                if game.chess_game and hasattr(game.chess_game, 'chess_coach'):
+                    try:
+                        explanation = game.chess_game.chess_coach.explain_move(board, move, player.elo)
+                        analysis = explanation
+                    except:
+                        pass
+                
+                await self.send_websocket_message(websocket, {
+                    'type': 'move_analysis',
+                    'data': {
+                        'move': move_uci,
+                        'explanation': analysis,
+                        'analysis': {'evaluation': 0}  # placeholder
+                    }
+                })
+            else:
+                await self.send_websocket_error(websocket, f"Illegal move: {move_uci}")
+                
         except Exception as e:
             await self.send_websocket_error(websocket, f"Analysis failed: {e}")
 
@@ -863,12 +895,27 @@ class ChessMentorServer:
         if not game:
             return
         
-        await self.send_websocket_message(websocket, {
-            'type': 'position_update',
-            'data': {
-                'position': game.chess_game.get_position_info()
+        try:
+            board = chess.Board(game.fen)
+            position_info = {
+                'fen': game.fen,
+                'turn': 'white' if board.turn else 'black',
+                'legal_moves': [move.uci() for move in board.legal_moves],
+                'move_count': len(game.move_history),
+                'is_check': board.is_check(),
+                'is_checkmate': board.is_checkmate(),
+                'is_stalemate': board.is_stalemate(),
+                'is_game_over': board.is_game_over()
             }
-        })
+            
+            await self.send_websocket_message(websocket, {
+                'type': 'position_update',
+                'data': {
+                    'position': position_info
+                }
+            })
+        except Exception as e:
+            await self.send_websocket_error(websocket, f"Failed to get position: {e}")
 
     async def handle_resign(self, websocket: WebSocket, player_id: str, data: dict):
         """כניעה"""
@@ -904,10 +951,11 @@ class ChessMentorServer:
             if game and game.type == 'multiplayer' and game.black_player:
                 # הודעה ליריב
                 opponent = game.black_player if game.white_player.id == player_id else game.white_player
-                await self.send_websocket_message(opponent.websocket, {
-                    'type': 'opponent_disconnected',
-                    'data': {'message': f'{player.name} disconnected'}
-                })
+                if opponent and opponent.websocket:
+                    await self.send_websocket_message(opponent.websocket, {
+                        'type': 'opponent_disconnected',
+                        'data': {'message': f'{player.name} disconnected'}
+                    })
                 
                 # סיום משחק אחרי השהיה
                 await asyncio.sleep(10)
@@ -921,22 +969,21 @@ class ChessMentorServer:
             del self.players[player_id]
 
     async def end_game(self, game_id: str, result: str = None):
-        """סיום משחק וחיסכון במסד נתונים"""
+        """סיום משחק"""
         game = self.games.get(game_id)
         if not game:
             return
         
         if not result:
-            result = game.chess_game.get_result()
+            try:
+                board = chess.Board(game.fen)
+                result = self._get_game_result(board)
+            except:
+                result = "Game ended"
         
         game.status = 'finished'
         
         print(f"🏁 Game {game_id} ended: {result}")
-        
-        # שמירת המשחק במסד נתונים
-        if self.db:
-            await self.save_game_to_db(game, result)
-            await self.update_player_stats(game, result)
         
         # עדכון שחקנים
         for player in [game.white_player, game.black_player]:
@@ -944,119 +991,70 @@ class ChessMentorServer:
                 player.is_in_game = False
                 player.game_id = None
         
+        # PGN פשוט
+        pgn = self._create_simple_pgn(game, result)
+        
         # הודעה לשחקנים
         await self.broadcast_to_game(game_id, {
             'type': 'game_end',
             'data': {
                 'result': result,
-                'pgn': game.chess_game.get_game_pgn(),
-                'final_position': game.chess_game.get_position_info()
+                'pgn': pgn,
+                'final_position': {
+                    'fen': game.fen,
+                    'move_count': len(game.move_history)
+                }
             }
         })
         
         # סגירת מנוע שחמט
-        game.chess_game.close()
+        if game.chess_game and hasattr(game.chess_game, 'close'):
+            try:
+                game.chess_game.close()
+            except:
+                pass
         
         # ניקוי אחרי השהיה
         await asyncio.sleep(60)
         if game_id in self.games:
             del self.games[game_id]
 
-    async def save_game_to_db(self, game: GameSession, result: str):
-        """שמירת משחק במסד נתונים"""
-        if not self.db:
-            return
-            
+    def _create_simple_pgn(self, game: GameSession, result: str) -> str:
+        """יצירת PGN פשוט"""
         try:
-            game_data = {
-                "game_id": game.id,
-                "type": game.type,
-                "players": {
-                    "white_id": game.white_player.user_id,
-                    "white_name": game.white_player.name,
-                    "black_id": game.black_player.user_id if game.black_player else None,
-                    "black_name": game.black_player.name if game.black_player else "AI"
-                },
-                "result": result,
-                "moves": [move.san for move in game.chess_game.history],
-                "pgn": game.chess_game.get_game_pgn(),
-                "final_fen": game.chess_game.board.fen(),
-                "move_count": len(game.chess_game.history),
-                "duration": time.time() - game.start_time,
-                "created_at": datetime.fromtimestamp(game.start_time),
-                "finished_at": datetime.now(),
-                "chat_history": game.chat_history if hasattr(game, 'chat_history') else []
-            }
+            pgn_lines = []
+            pgn_lines.append('[Event "ChessMentor Game"]')
+            pgn_lines.append(f'[Date "{datetime.now().strftime("%Y.%m.%d")}"]')
+            pgn_lines.append(f'[White "{game.white_player.name}"]')
+            pgn_lines.append(f'[Black "{game.black_player.name if game.black_player else "AI"}"]')
+            pgn_lines.append(f'[Result "{result}"]')
+            pgn_lines.append('')
             
-            await self.db.games.insert_one(game_data)
-            print(f"💾 Game {game.id} saved to database")
+            # הוספת מהלכים
+            board = chess.Board()
+            moves_text = []
             
+            for i, move_uci in enumerate(game.move_history):
+                try:
+                    move = chess.Move.from_uci(move_uci)
+                    if move in board.legal_moves:
+                        san = board.san(move)
+                        board.push(move)
+                        
+                        if i % 2 == 0:  # מהלך לבן
+                            moves_text.append(f"{(i//2)+1}. {san}")
+                        else:  # מהלך שחור
+                            moves_text[-1] += f" {san}"
+                except:
+                    continue
+            
+            pgn_lines.append(' '.join(moves_text))
+            pgn_lines.append(result)
+            
+            return '\n'.join(pgn_lines)
         except Exception as e:
-            print(f"❌ Failed to save game to database: {e}")
-
-    async def update_player_stats(self, game: GameSession, result: str):
-        """עדכון סטטיסטיקות שחקנים"""
-        if not self.db:
-            return
-            
-        try:
-            # קביעת מנצח
-            winner = None
-            if "white wins" in result.lower():
-                winner = "white"
-            elif "black wins" in result.lower():
-                winner = "black"
-            
-            # עדכון לבן
-            if game.white_player.user_id:
-                update_data = {
-                    "$inc": {"games_played": 1},
-                    "$set": {"last_active": datetime.now()}
-                }
-                if winner == "white":
-                    update_data["$inc"]["games_won"] = 1
-                    
-                await self.db.users.update_one(
-                    {"_id": game.white_player.user_id}, 
-                    update_data
-                )
-            
-            # עדכון שחור (אם זה לא AI)
-            if game.black_player and game.black_player.user_id:
-                update_data = {
-                    "$inc": {"games_played": 1},
-                    "$set": {"last_active": datetime.now()}
-                }
-                if winner == "black":
-                    update_data["$inc"]["games_won"] = 1
-                    
-                await self.db.users.update_one(
-                    {"_id": game.black_player.user_id},
-                    update_data
-                )
-                
-        except Exception as e:
-            print(f"❌ Failed to update player stats: {e}")
-
-    async def get_user_games(self, user_id: str, limit: int = 20):
-        """קבלת משחקי משתמש"""
-        if not self.db:
-            return []
-            
-        try:
-            cursor = self.db.games.find({
-                "$or": [
-                    {"players.white_id": user_id},
-                    {"players.black_id": user_id}
-                ]
-            }).sort("created_at", -1).limit(limit)
-            
-            games = await cursor.to_list(length=limit)
-            return games
-            
-        except Exception as e:
-            print(f"❌ Failed to get user games: {e}")
-            return []
+            print(f"PGN creation error: {e}")
+            return f"Game between {game.white_player.name} and {game.black_player.name if game.black_player else 'AI'}"
 
     async def send_websocket_message(self, websocket: WebSocket, message: dict):
         """שליחת הודעה ב-WebSocket"""
@@ -1082,34 +1080,41 @@ class ChessMentorServer:
             if player and player.websocket:
                 await self.send_websocket_message(player.websocket, message)
 
-    def run(self, host: str = "localhost", port: int = 5001):
+    def run(self, host: str = None, port: int = None):
         """הפעלת השרת"""
-        async def startup():
-            await self.connect_to_mongodb()
+        # השתמש בהגדרות מ-.env אם לא סופקו פרמטרים
+        run_host = host or self.host
+        run_port = port or self.port
         
-        self.app.add_event_handler("startup", startup)
-        
-        print("🚀 ChessMentor Complete Python Server starting...")
-        print(f"🌐 Server: {host}:{port}")
-        print(f"♟️ Stockfish: {self.stockfish_path}")
-        print(f"🔗 WebSocket: ws://{host}:{port}/ws")
-        print(f"🏥 Health: http://{host}:{port}/health")
-        print(f"🤖 OpenAI API: http://{host}:{port}/api/auth/openai")
-        print(f"🍃 MongoDB: {self.mongo_uri[:50]}..." if self.mongo_uri else "🍃 MongoDB: Not configured")
+        print("🚀 ChessMentor Python Server starting...")
+        print(f"🌐 Server: {run_host}:{run_port}")
+        print(f"♟️ Stockfish: {self.stockfish_path if self.stockfish_path else 'Not available'}")
+        print(f"🔗 WebSocket: ws://{run_host}:{run_port}/ws")
+        print(f"🏥 Health: http://{run_host}:{run_port}/health")
+        print(f"🤖 OpenAI API: http://{run_host}:{run_port}/auth/openai")
+        print(f"💬 Coach API: http://{run_host}:{run_port}/chess/coach")
+        print(f"📊 Games API: http://{run_host}:{run_port}/games")
         print("")
         
         if not self.stockfish_path:
-            print("⚠️ WARNING: Stockfish not found! AI games will not work.")
-            print("   Please install Stockfish or set the correct path.")
+            print("⚠️ WARNING: Stockfish not found! AI will use random moves.")
+            print("   Please install Stockfish for better AI gameplay.")
         
-        uvicorn.run(self.app, host=host, port=port, log_level="info")
+        try:
+            uvicorn.run(
+                self.app, 
+                host=run_host, 
+                port=run_port, 
+                log_level="debug" if self.debug else "info"
+            )
+        except KeyboardInterrupt:
+            print("\n👋 Server shutting down...")
+        except Exception as e:
+            print(f"❌ Server error: {e}")
 
 if __name__ == "__main__":
-    # הגדרת נתיב Stockfish שלך
-    STOCKFISH_PATH = r"C:\Users\Neriya\Downloads\stockfish-windows-x86-64-avx2\stockfish\stockfish-windows-x86-64-avx2.exe"
+    # הגדרת נתיב Stockfish - עדכן לפי המיקום שלך
+    STOCKFISH_PATH = os.getenv('STOCKFISH_PATH') or r"C:\Users\Neriya\Downloads\stockfish-windows-x86-64-avx2\stockfish\stockfish-windows-x86-64-avx2.exe"
     
-    # הגדרת MongoDB
-    MONGO_URI = "mongodb+srv://neriyajacobsen:BU60Z6kVEADTm6tm@cluster0.fhzc24d.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-    
-    server = ChessMentorServer(STOCKFISH_PATH, MONGO_URI)
+    server = ChessMentorServer(STOCKFISH_PATH)
     server.run()

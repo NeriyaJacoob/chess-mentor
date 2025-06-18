@@ -1,4 +1,4 @@
-// src/components/Auth/OpenAIAuth.js
+// src/components/Auth/OpenAIAuth.js - גרסה מתוקנת
 // Component for entering OpenAI API key
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
@@ -9,16 +9,31 @@ const OpenAIAuth = () => {
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const dispatch = useDispatch();
-  const { isAuthenticated, loading, error } = useSelector(state => state.auth);
+  
+  // תיקון: שימוש ב-selector הנכון
+  const { isOpenAIConnected, loading, error } = useSelector(state => ({
+    isOpenAIConnected: state.auth.isOpenAIConnected, // לא isAuthenticated
+    loading: state.auth.loading,
+    error: state.auth.error
+  }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (apiKey.trim()) {
-      dispatch(authenticateOpenAI(apiKey.trim()));
+      console.log('🚀 Submitting OpenAI API key...');
+      const result = await dispatch(authenticateOpenAI(apiKey.trim()));
+      
+      if (result.meta.requestStatus === 'fulfilled') {
+        console.log('✅ OpenAI authentication successful');
+        setApiKey(''); // נקה את השדה אחרי הצלחה
+      } else {
+        console.log('❌ OpenAI authentication failed:', result.payload);
+      }
     }
   };
 
   const handleLogout = () => {
+    console.log('🔌 Disconnecting from OpenAI...');
     dispatch(logout());
     setApiKey('');
   };
@@ -27,7 +42,8 @@ const OpenAIAuth = () => {
     dispatch(clearError());
   };
 
-  if (isAuthenticated) {
+  // אם מחובר בהצלחה
+  if (isOpenAIConnected) {
     return (
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -52,8 +68,8 @@ const OpenAIAuth = () => {
           </div>
           <button
             onClick={handleLogout}
-            className="text-green-600 hover:text-green-800 text-sm font-medium focus:outline-none focus:underline transition-colors"
             disabled={loading}
+            className="text-green-600 hover:text-green-800 text-sm font-medium focus:outline-none focus:underline transition-colors disabled:opacity-50"
           >
             {loading ? 'מתנתק...' : 'התנתק'}
           </button>
@@ -115,7 +131,7 @@ const OpenAIAuth = () => {
               type={showKey ? 'text' : 'password'}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
+              placeholder="sk-proj-..."
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm"
               disabled={loading}
               required

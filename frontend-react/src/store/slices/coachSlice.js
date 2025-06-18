@@ -1,38 +1,52 @@
-// src/store/slices/coachSlice.js
+// src/store/slices/coachSlice.js - גרסה מתוקנת
 // Handles chat messages and analysis replies
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
-// Async thunk for sending message to coach
+// Async thunk for sending message to coach - תיקון הנתיב
 export const sendToCoach = createAsyncThunk(
   'coach/sendMessage',
   async ({ message, gameState, analysisType = 'general' }, { getState, rejectWithValue }) => {
     try {
       const { auth } = getState();
       
-      if (!auth.sessionId) {
-        return rejectWithValue('Not authenticated');
+      // בדיקה שיש חיבור לOpenAI
+      if (!auth.openAISessionId) {
+        return rejectWithValue('Not connected to OpenAI. Please authenticate first.');
       }
 
+      console.log('💬 Sending message to coach:', { message, analysisType });
+
+      // שינוי הנתיב להתאים לשרת החדש
       const response = await axios.post(`${API_BASE_URL}/chess/coach`, {
-        sessionId: auth.sessionId,
+        sessionId: auth.openAISessionId, // שימוש ב-OpenAI session
         message,
         gameState,
         analysisType
       });
 
+      console.log('✅ Coach response received:', response.data);
+
       return {
         message,
         response: response.data.response,
-        timestamp: response.data.timestamp,
+        timestamp: response.data.timestamp || new Date().toISOString(),
         analysisType
       };
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.error || 'Failed to get coach response'
-      );
+      console.error('❌ Coach request failed:', error);
+      
+      if (error.response?.status === 401) {
+        return rejectWithValue('Authentication expired. Please reconnect to OpenAI.');
+      } else if (error.response?.status === 503) {
+        return rejectWithValue('OpenAI service temporarily unavailable');
+      } else if (error.response?.data?.detail) {
+        return rejectWithValue(error.response.data.detail);
+      } else {
+        return rejectWithValue('Failed to get coach response');
+      }
     }
   }
 );
@@ -68,10 +82,12 @@ const coachSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(sendToCoach.pending, (state) => {
+        console.log('🔄 Coach request pending...');
         state.isLoading = true;
         state.error = null;
       })
       .addCase(sendToCoach.fulfilled, (state, action) => {
+        console.log('✅ Coach request fulfilled:', action.payload);
         state.isLoading = false;
         
         const { message, response, timestamp, analysisType } = action.payload;
@@ -111,6 +127,7 @@ const coachSlice = createSlice({
         });
       })
       .addCase(sendToCoach.rejected, (state, action) => {
+        console.log('❌ Coach request rejected:', action.payload);
         state.isLoading = false;
         state.error = action.payload;
       });
