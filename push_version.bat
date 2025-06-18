@@ -1,16 +1,8 @@
 @echo off
-for /f "tokens=1-4 delims=/: " %%a in ("%date% %time%") do (
-    set year=%%d
-    set month=%%b
-    set day=%%c
-    set hour=%%e
-    set minute=%%f
+for /f %%a in ('powershell -command "Get-Date -Format \"yyyy.MM.dd-HHmm\""') do (
+  set version=version-%%a
 )
-
-setlocal enabledelayedexpansion
-set version=version-%year%.%month%.%day%-%hour%%minute%
-
-echo 🔄 העלאת גרסה: %version%
+echo 🔼 העלאת גרסה: %version%
 git checkout -b %version%
 git add .
 git commit -m "🚀 שמירה אוטומטית - %version%"
