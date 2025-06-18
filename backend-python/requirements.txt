@@ -1,7 +1,29 @@
+# Requirements for ChessMentor Complete Python Server
+# FastAPI & WebSocket
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-python-chess==1.999
 websockets==12.0
-openai==1.35.7 # הוספנו עבור GPT
-pymongo==4.8.0 # הוספנו עבור MongoDB
-python-dotenv==1.0.1 # הוספנו לניהול סודות
+
+# Chess Engine
+python-chess==1.999
+
+# OpenAI
+openai==1.3.5
+
+# MongoDB
+motor==3.3.2
+pymongo==4.6.0
+bcrypt==4.1.2
+
+# Environment & Config
+python-dotenv==1.0.0
+
+# Data handling
+python-multipart==0.0.6
+
+# Optional: Enhanced logging
+colorlog==6.8.0
+
+# Development tools (optional)
+# pytest==7.4.3
+# black==23.11.0

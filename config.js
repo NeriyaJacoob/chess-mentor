@@ -23,7 +23,6 @@ const config = {
   // Server Ports
   ports: {
     frontend: parseInt(process.env.FRONTEND_PORT) || 3000,
-    backend: parseInt(process.env.BACKEND_PORT) || 5000,
     python: parseInt(process.env.PYTHON_PORT) || 5001,
     websocket: parseInt(process.env.WEBSOCKET_PORT) || 5001
   },
@@ -31,7 +30,6 @@ const config = {
   // URLs
   urls: {
     frontend: process.env.FRONTEND_URL || 'http://localhost:3000',
-    backend: process.env.BACKEND_URL || 'http://localhost:5000',
     python: process.env.PYTHON_URL || 'http://localhost:5001',
     websocket: process.env.WEBSOCKET_URL || 'ws://localhost:5001/ws'
   },
@@ -137,7 +135,6 @@ const config = {
   paths: {
     root: process.cwd(),
     frontend: path.join(process.cwd(), 'frontend-react'),
-    backend: path.join(process.cwd(), 'backend-nodejs'),
     python: path.join(process.cwd(), 'backend-python'),
     uploads: path.join(process.cwd(), 'uploads'),
     logs: path.join(process.cwd(), 'logs'),
