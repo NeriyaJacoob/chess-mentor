@@ -1,0 +1,45 @@
+{
+  "name": "chessmentor",
+  "version": "1.0.0",
+  "description": "Advanced Chess Training Platform with AI Coach",
+  "private": true,
+  "workspaces": [
+    "frontend-react",
+    "backend-nodejs"
+  ],
+  "scripts": {
+    "start": "node start.js",
+    "dev": "npm run start",
+    "dev:backend": "npm run dev --workspace=backend-nodejs",
+    "dev:frontend": "npm run start --workspace=frontend-react",
+    "dev:python": "cd backend-python && python chess_server.py",
+    "build": "npm run build --workspace=frontend-react",
+    "build:backend": "npm run build --workspace=backend-nodejs",
+    "install:all": "npm install && npm install --workspace=frontend-react && npm install --workspace=backend-nodejs",
+    "clean": "rm -rf node_modules frontend-react/node_modules backend-nodejs/node_modules",
+    "clean:build": "rm -rf frontend-react/build backend-nodejs/dist",
+    "test": "npm test --workspace=frontend-react",
+    "test:backend": "npm test --workspace=backend-nodejs"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "chess",
+    "ai",
+    "education",
+    "training",
+    "react",
+    "nodejs",
+    "python",
+    "stockfish",
+    "openai",
+    "gpt"
+  ],
+  "author": "ChessMentor Team",
+  "license": "MIT"
+}
