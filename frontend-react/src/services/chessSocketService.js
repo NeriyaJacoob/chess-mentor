@@ -1,49 +1,51 @@
-// frontend-react/src/services/chessSocketService.js
-//
-// Tiny wrapper around the WebSocket API used by the React
-// application. Provides a simple event based interface for
-// starting games, sending moves and receiving updates from the
-// Python backend.
+// frontend-react/src/services/chessSocketService.js - FIXED FOR STOCKFISH
+// WebSocket service for real Stockfish chess engine
+
 class ChessSocketService {
   constructor() {
     this.socket = null;
     this.gameId = null;
     this.playerColor = null;
     this.isConnected = false;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
     this.callbacks = {
       onConnected: null,
       onGameStart: null,
       onMoveMade: null,
       onGameEnd: null,
       onError: null,
-      onMoveAnalysis: null,
       onOpponentDisconnected: null,
-      onSearching: null
+      onSearching: null,
+      onAILevelChanged: null,
+      onPositionUpdate: null
     };
   }
 
-  // Connect to the Python WebSocket server and register the player.
-  // Returns a promise that resolves once the underlying socket is open
-  // and initial "join" message has been sent.
+  // Connect to Python WebSocket server
   connect(playerData = {}) {
     return new Promise((resolve, reject) => {
       try {
+        // בדיקה אם כבר מחובר
+        if (this.isConnected && this.socket?.readyState === WebSocket.OPEN) {
+          console.log('🔗 Already connected to server');
+          resolve(this);
+          return;
+        }
+
+        console.log('🔗 Connecting to chess server...');
         this.socket = new WebSocket('ws://localhost:5001/ws');
         
         this.socket.onopen = () => {
-          console.log('🔗 Connected to chess server');
+          console.log('✅ Connected to chess server');
           this.isConnected = true;
+          this.reconnectAttempts = 0;
           
-          // Join the server
+          // שליחת הודעת join
           this.send('join', {
             name: playerData.name || 'Player',
             elo: playerData.elo || 1200
           });
-          
-          // Call the connected callback
-          if (this.callbacks.onConnected) {
-            this.callbacks.onConnected({ message: 'Connected to server' });
-          }
           
           resolve(this);
         };
@@ -57,11 +59,20 @@ class ChessSocketService {
           }
         };
 
-        this.socket.onclose = () => {
+        this.socket.onclose = (event) => {
           console.log('🔌 Disconnected from chess server');
           this.isConnected = false;
           this.gameId = null;
           this.playerColor = null;
+
+          // ניסיון התחברות מחדש אוטומטי
+          if (this.reconnectAttempts < this.maxReconnectAttempts && !event.wasClean) {
+            this.reconnectAttempts++;
+            console.log(`🔄 Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+            setTimeout(() => {
+              this.connect(playerData);
+            }, 2000 * this.reconnectAttempts);
+          }
         };
 
         this.socket.onerror = (error) => {
@@ -70,14 +81,12 @@ class ChessSocketService {
           reject(error);
         };
 
-        // Resolve when connected
+        // Timeout for connection
         setTimeout(() => {
-          if (this.isConnected) {
-            resolve(this);
-          } else {
+          if (!this.isConnected) {
             reject(new Error('Connection timeout'));
           }
-        }, 5000);
+        }, 10000);
 
       } catch (error) {
         reject(error);
@@ -85,15 +94,14 @@ class ChessSocketService {
     });
   }
 
-  // Parse a single message from the server and trigger the
-  // appropriate callback. All protocol message types are handled here.
+  // Handle incoming messages from server
   handleMessage(message) {
     const { type, data } = message;
     console.log('📨 Received:', type, data);
 
     switch (type) {
       case 'connected':
-        console.log(' Joined server:', data.message);
+        console.log('✅ Joined server:', data.message);
         if (this.callbacks.onConnected) {
           this.callbacks.onConnected(data);
         }
@@ -103,13 +111,14 @@ class ChessSocketService {
         this.gameId = data.game_id;
         this.playerColor = data.color;
         console.log(`🎮 Game started: ${this.gameId} as ${this.playerColor}`);
+        console.log(`🤖 VS: ${data.opponent.name} (ELO: ${data.opponent.elo})`);
         if (this.callbacks.onGameStart) {
           this.callbacks.onGameStart(data);
         }
         break;
 
       case 'move_made':
-        console.log('♟️ Move made:', data.move);
+        console.log(`♟️ Move: ${data.move} (${data.san}) by ${data.player}`);
         if (this.callbacks.onMoveMade) {
           this.callbacks.onMoveMade(data);
         }
@@ -131,17 +140,17 @@ class ChessSocketService {
         }
         break;
 
-      case 'move_analysis':
-        console.log('🧠 Move analysis:', data);
-        if (this.callbacks.onMoveAnalysis) {
-          this.callbacks.onMoveAnalysis(data);
+      case 'ai_level_changed':
+        console.log(`🎯 AI level changed: ${data.ai_level} (ELO: ${data.elo})`);
+        if (this.callbacks.onAILevelChanged) {
+          this.callbacks.onAILevelChanged(data);
         }
         break;
 
-      case 'opponent_disconnected':
-        console.log('🔌 Opponent disconnected');
-        if (this.callbacks.onOpponentDisconnected) {
-          this.callbacks.onOpponentDisconnected(data);
+      case 'position_update':
+        console.log('📋 Position updated');
+        if (this.callbacks.onPositionUpdate) {
+          this.callbacks.onPositionUpdate(data);
         }
         break;
 
@@ -152,10 +161,10 @@ class ChessSocketService {
         }
         break;
 
-      case 'search_timeout':
-        console.log('⏰ Search timeout');
-        if (this.callbacks.onError) {
-          this.callbacks.onError({ message: 'No opponent found' });
+      case 'opponent_disconnected':
+        console.log('🔌 Opponent disconnected');
+        if (this.callbacks.onOpponentDisconnected) {
+          this.callbacks.onOpponentDisconnected(data);
         }
         break;
 
@@ -164,17 +173,15 @@ class ChessSocketService {
     }
   }
 
+  // Send message to server
   send(action, data = {}) {
-    if (!this.isConnected || !this.socket) {
+    if (!this.isConnected || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
       console.error('❌ Not connected to server');
       return false;
     }
 
     try {
-      const message = {
-        action,
-        data
-      };
+      const message = { action, data };
       this.socket.send(JSON.stringify(message));
       console.log('📤 Sent:', action, data);
       return true;
@@ -184,17 +191,38 @@ class ChessSocketService {
     }
   }
 
-  // Game actions
-  findGame(mode = 'ai') {
-    return this.send('find_game', { mode });
+  // Game actions for Stockfish
+  findGame(aiLevel = 5) {
+    console.log(`🤖 Starting game against AI Level ${aiLevel}`);
+    return this.send('find_game', { 
+      mode: 'ai',
+      ai_level: aiLevel
+    });
+  }
+
+  newGame(aiLevel = 5) {
+    console.log(`🆕 Starting new game against AI Level ${aiLevel}`);
+    return this.send('new_game', { 
+      ai_level: aiLevel
+    });
   }
 
   makeMove(move) {
-    return this.send('make_move', { move });
+    if (typeof move === 'object' && move.from && move.to) {
+      // Convert chess.js format to UCI format
+      const uciMove = move.from + move.to + (move.promotion || '');
+      console.log(`♟️ Making move: ${uciMove}`);
+      return this.send('make_move', { move: uciMove });
+    } else {
+      // Already in UCI format
+      console.log(`♟️ Making move: ${move}`);
+      return this.send('make_move', { move });
+    }
   }
 
-  analyzeMove(move) {
-    return this.send('analyze_move', { move });
+  setAILevel(level) {
+    console.log(`🎯 Setting AI level to: ${level}`);
+    return this.send('set_ai_level', { level });
   }
 
   getPosition() {
@@ -202,48 +230,54 @@ class ChessSocketService {
   }
 
   resign() {
+    console.log('🏳️ Resigning game');
     return this.send('resign');
   }
 
-  // Event handlers - השגיאה הייתה כאן!
+  // Event handlers
   onConnected(callback) {
     this.callbacks.onConnected = callback;
-    return this; // החזר this כדי לאפשר method chaining
+    return this;
   }
 
   onGameStart(callback) {
     this.callbacks.onGameStart = callback;
-    return this; // החזר this כדי לאפשר method chaining
+    return this;
   }
 
   onMoveMade(callback) {
     this.callbacks.onMoveMade = callback;
-    return this; // החזר this כדי לאפשר method chaining
+    return this;
   }
 
   onGameEnd(callback) {
     this.callbacks.onGameEnd = callback;
-    return this; // החזר this כדי לאפשר method chaining
+    return this;
   }
 
   onError(callback) {
     this.callbacks.onError = callback;
-    return this; // החזר this כדי לאפשר method chaining
+    return this;
   }
 
-  onMoveAnalysis(callback) {
-    this.callbacks.onMoveAnalysis = callback;
-    return this; // החזר this כדי לאפשר method chaining
+  onAILevelChanged(callback) {
+    this.callbacks.onAILevelChanged = callback;
+    return this;
+  }
+
+  onPositionUpdate(callback) {
+    this.callbacks.onPositionUpdate = callback;
+    return this;
   }
 
   onOpponentDisconnected(callback) {
     this.callbacks.onOpponentDisconnected = callback;
-    return this; // החזר this כדי לאפשר method chaining
+    return this;
   }
 
   onSearching(callback) {
     this.callbacks.onSearching = callback;
-    return this; // החזר this כדי לאפשר method chaining
+    return this;
   }
 
   // Utility methods
@@ -259,6 +293,16 @@ class ChessSocketService {
     return this.playerColor;
   }
 
+  getConnectionStatus() {
+    return {
+      isConnected: this.isConnected,
+      isInGame: this.isInGame(),
+      gameId: this.gameId,
+      playerColor: this.playerColor,
+      reconnectAttempts: this.reconnectAttempts
+    };
+  }
+
   disconnect() {
     if (this.socket) {
       this.socket.close();
@@ -267,9 +311,23 @@ class ChessSocketService {
     this.isConnected = false;
     this.gameId = null;
     this.playerColor = null;
+    this.reconnectAttempts = 0;
+    console.log('🔌 Manually disconnected from server');
+  }
+
+  // Test connection
+  async testConnection() {
+    try {
+      await this.connect({ name: 'TestPlayer', elo: 1200 });
+      console.log('✅ Connection test successful');
+      return true;
+    } catch (error) {
+      console.error('❌ Connection test failed:', error);
+      return false;
+    }
   }
 }
 
-// Export singleton instance - זה חשוב מאוד!
+// Export singleton instance
 const chessSocketService = new ChessSocketService();
 export default chessSocketService;

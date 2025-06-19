@@ -7,15 +7,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ChessSquare from './ChessSquare';
 import ChessPiece from './ChessPiece';
 
+
 const ChessBoard = ({ 
   size = 480, 
   showCoordinates = true, 
   animationSpeed = 'normal',
-  interactive = true 
+  interactive = true,
+  onMove = null,  // ← NEW: Callback for moves
+  disabled = false  // ← NEW: Disable interaction
 }) => {
   const dispatch = useDispatch();
   const { fen, selectedSquare, legalMoves, lastMove, playerColor, pieceStyle, boardTheme } = useSelector(state => state.game);
   
+  // ← הוסף את זה כאן:
+  console.log('🏁 ChessBoard mounted with props:', { 
+    onMove: !!onMove, 
+    disabled, 
+    interactive,
+    fen: fen?.substring(0, 20) + '...'
+  });
+
   // Local state for drag & drop
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [draggedFrom, setDraggedFrom] = useState(null);
@@ -70,28 +81,56 @@ const ChessBoard = ({
   // Event handlers
   // Handle board square clicks and piece selection
   const handleSquareClick = useCallback((square) => {
-    if (!interactive) return;
+  console.log('🎯 Square clicked:', square, { interactive, disabled, hasOnMove: !!onMove });
+  
+  if (!interactive || disabled) {
+    console.log('🚫 Interaction blocked:', { interactive, disabled });
+    return;
+  }
+  
+  const piece = board.flat().find(sq => sq.square === square)?.piece;
+  console.log('🎯 Found piece:', piece, 'at square:', square);
+  
+  if (selectedSquare && legalMoves.includes(square)) {
+    // Make move
+    const move = { from: selectedSquare, to: square };
+    console.log('🎯 ChessBoard: Making move:', move);
     
-    const piece = board.flat().find(sq => sq.square === square)?.piece;
-    
-    if (selectedSquare && legalMoves.includes(square)) {
-      // Make move
-      dispatch(makeMove({ from: selectedSquare, to: square }));
-    } else if (piece) {
-      // Select piece if it belongs to current player
-      const isWhitePiece = piece === piece.toUpperCase();
-      const isPlayerTurn = (playerColor === 'white' && isWhitePiece) || 
-                          (playerColor === 'black' && !isWhitePiece);
+    // Call external onMove handler if provided
+    if (onMove) {
+      console.log('🎯 Calling onMove with:', move);
+      const success = onMove(move);
+      console.log('🎯 onMove result:', success);
       
-      if (isPlayerTurn) {
-        dispatch(selectSquare(square));
+      // Handle async results
+      if (success && typeof success.then === 'function') {
+        success.then(result => {
+          console.log('🎯 Async onMove result:', result);
+        }).catch(error => {
+          console.error('❌ onMove error:', error);
+        });
       }
+      return;
     } else {
-      // Deselect
-      dispatch(selectSquare(null));
+      console.log('🎯 No onMove handler, using Redux');
+      dispatch(makeMove({ from: selectedSquare, to: square }));
     }
-  }, [dispatch, selectedSquare, legalMoves, board, playerColor, interactive]);
-
+  } else if (piece) {
+    console.log('🎯 Selecting piece:', piece);
+    // Select piece if it belongs to current player
+    const isWhitePiece = piece === piece.toUpperCase();
+    const isPlayerTurn = (playerColor === 'white' && isWhitePiece) || 
+                        (playerColor === 'black' && !isWhitePiece);
+    
+    if (isPlayerTurn) {
+      dispatch(selectSquare(square));
+    }
+  } else {
+    console.log('🎯 Deselecting');
+    // Deselect
+    dispatch(selectSquare(null));
+  }
+  }, [dispatch, selectedSquare, legalMoves, board, playerColor, interactive, disabled, onMove]);
   // Start dragging a piece
   const handleDragStart = useCallback((e, piece, square) => {
     if (!interactive) return;
@@ -121,7 +160,7 @@ const ChessBoard = ({
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
   }, []);
-
+  
   // Helper functions
   const isSquareHighlighted = useCallback((square) => {
     return selectedSquare === square || 
