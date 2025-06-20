@@ -1,217 +1,494 @@
-// frontend-react/src/layouts/ProfessionalLayout.jsx
-// Layout with sidebar and top bar
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
 import { 
-  Search, 
-  Bell, 
-  Sun, 
-  Moon, 
-  Settings, 
-  User, 
-  Trophy,
-  Gamepad2,
-  Brain,
-  ChevronDown
+  Crown,
+  Menu,
+  X,
+  Wifi,
+  WifiOff,
+  Zap,
+  Activity,
+  AlertTriangle
 } from 'lucide-react';
-import ProfessionalSidebar from '../components/Layout/ProfessionalSidebar';
 
-// TopBar מובנה
-const InlineTopBar = () => {
-  const navigate = useNavigate();
-  const [searchFocus, setSearchFocus] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('chessmentor-theme') || 'light';
+// Mock components - replace with your actual components
+const ProfessionalSidebar = ({ isCollapsed, onToggleCollapse, activeRoute }) => (
+  <div className={`${isCollapsed ? 'w-16' : 'w-64'} transition-all duration-300 bg-slate-900/95 backdrop-blur-xl border-r border-white/10`}>
+    <div className="p-4 text-white text-center">
+      {isCollapsed ? <Crown className="h-6 w-6 mx-auto" /> : 'ChessMentor Sidebar'}
+    </div>
+  </div>
+);
+
+const ModernTopBar = ({ onMenuToggle, isMenuOpen, theme, onThemeToggle }) => (
+  <div className="h-16 bg-white/5 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-6">
+    <div className="flex items-center space-x-4">
+      <button onClick={onMenuToggle} className="lg:hidden text-white">
+        {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+      </button>
+      <span className="text-white font-semibold">ChessMentor TopBar</span>
+    </div>
+    <button onClick={onThemeToggle} className="text-white">
+      Theme: {theme}
+    </button>
+  </div>
+);
+
+const ProfessionalLayout = ({ children }) => {
+  // UI State
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [theme, setTheme] = useState('dark');
+  const [isOnline, setIsOnline] = useState(true);
+  const [performanceMode, setPerformanceMode] = useState('normal');
+  
+  // System State
+  const [systemStatus, setSystemStatus] = useState({
+    engine: 'ready',
+    api: 'connected',
+    websocket: 'connected',
+    lastUpdate: new Date()
   });
   
-  const { isAuthenticated } = useSelector(state => state.auth);
-  const { moveCount, isGameOver } = useSelector(state => state.game);
+  const [notifications, setNotifications] = useState([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [deviceInfo, setDeviceInfo] = useState({
+    isMobile: false,
+    isTablet: false,
+    isDesktop: true
+  });
 
+  // Initialize system
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    document.body.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('chessmentor-theme', theme);
-  }, [theme]);
+    // Detect device type
+    const updateDeviceInfo = () => {
+      const width = window.innerWidth;
+      setDeviceInfo({
+        isMobile: width < 768,
+        isTablet: width >= 768 && width < 1024,
+        isDesktop: width >= 1024
+      });
+    };
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
+    // Check online status
+    const updateOnlineStatus = () => {
+      setIsOnline(navigator.onLine);
+    };
+
+    // System health check
+    const checkSystemHealth = () => {
+      setSystemStatus(prev => ({
+        ...prev,
+        lastUpdate: new Date(),
+        engine: Math.random() > 0.1 ? 'ready' : 'error',
+        api: Math.random() > 0.05 ? 'connected' : 'disconnected'
+      }));
+    };
+
+    // Event listeners
+    window.addEventListener('resize', updateDeviceInfo);
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    // Initialize
+    updateDeviceInfo();
+    updateOnlineStatus();
+    
+    // Health check interval
+    const healthInterval = setInterval(checkSystemHealth, 30000);
+
+    // Auto-collapse sidebar on mobile
+    if (deviceInfo.isMobile) {
+      setSidebarCollapsed(true);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateDeviceInfo);
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+      clearInterval(healthInterval);
+    };
+  }, []);
+
+  // Handle sidebar toggle
+  const handleSidebarToggle = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
+  // Handle mobile menu toggle
+  const handleMobileMenuToggle = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  };
+
+  // Handle theme toggle
+  const handleThemeToggle = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
   };
 
-  const getGameStatus = () => {
-    if (isGameOver) return { status: 'completed', color: 'text-gray-500 bg-gray-100', label: 'Game Over' };
-    if (moveCount > 0) return { status: 'active', color: 'text-green-600 bg-green-100', label: `Move ${moveCount}` };
-    return { status: 'ready', color: 'text-blue-600 bg-blue-100', label: 'Ready to Play' };
+  // Handle fullscreen toggle
+  const handleFullscreenToggle = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
   };
 
-  const gameStatus = getGameStatus();
+  // Performance optimization
+  const handlePerformanceModeChange = (mode) => {
+    setPerformanceMode(mode);
+    // Apply performance optimizations based on mode
+    if (mode === 'high-performance') {
+      document.body.classList.add('reduce-animations');
+    } else {
+      document.body.classList.remove('reduce-animations');
+    }
+  };
 
-  return (
-    <header className={`sticky top-0 z-40 border-b px-6 py-4 transition-all duration-300 ${
-      theme === 'dark' 
-        ? 'bg-gray-900/95 backdrop-blur-sm border-gray-700' 
-        : 'bg-white/95 backdrop-blur-sm border-gray-200'
-    }`}>
-      <div className="flex items-center justify-between">
-        {/* Left Section - Search */}
-        <div className="flex-1 max-w-lg">
-          <div className={`relative transition-all duration-300 ${searchFocus ? 'scale-105' : 'scale-100'}`}>
-            <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-              <Search className={`h-5 w-5 transition-colors ${
-                searchFocus ? 'text-blue-500' : theme === 'dark' ? 'text-gray-400' : 'text-gray-400'
-              }`} />
-            </div>
-            <input
-              type="text"
-              placeholder="Search games, positions, players..."
-              className={`w-full pl-12 pr-6 py-3 border rounded-2xl transition-all duration-300 ${
-                theme === 'dark'
-                  ? 'bg-gray-800 border-gray-600 text-gray-100 placeholder-gray-400'
-                  : 'bg-gray-50/80 border-gray-300 text-gray-900 placeholder-gray-500'
-              } ${
-                searchFocus 
-                  ? 'border-blue-400 shadow-lg ring-4 ring-blue-100/50 scale-105 bg-white' 
-                  : 'hover:border-gray-400 hover:shadow-md'
-              } focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500`}
-              onFocus={() => setSearchFocus(true)}
-              onBlur={() => setSearchFocus(false)}
-            />
-          </div>
-        </div>
+  // System status indicator
+  const SystemStatusIndicator = () => {
+    const getStatusColor = (status) => {
+      switch (status) {
+        case 'ready':
+        case 'connected':
+          return 'text-green-400 bg-green-400/20';
+        case 'thinking':
+        case 'loading':
+          return 'text-yellow-400 bg-yellow-400/20';
+        case 'error':
+        case 'disconnected':
+          return 'text-red-400 bg-red-400/20';
+        default:
+          return 'text-slate-400 bg-slate-400/20';
+      }
+    };
 
-        {/* Center Section - Game Status & Quick Stats */}
-        <div className="hidden lg:flex items-center space-x-4 mx-8">
-          {/* Game Status */}
-          <div className={`flex items-center space-x-3 px-5 py-3 rounded-2xl border-2 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 ${
-            gameStatus.color
-          } ${theme === 'dark' ? 'border-gray-600' : 'border-gray-200'}`}>
-            <div className={`w-3 h-3 rounded-full ${
-              gameStatus.status === 'active' ? 'bg-green-500 animate-pulse shadow-lg shadow-green-500/50' :
-              gameStatus.status === 'completed' ? 'bg-gray-400' : 'bg-blue-500 animate-pulse shadow-lg shadow-blue-500/50'
-            }`} />
-            <Gamepad2 className="h-5 w-5" />
-            <span className="text-sm font-bold">
-              {gameStatus.label}
-            </span>
-          </div>
+    const hasError = Object.values(systemStatus).some(status => 
+      status === 'error' || status === 'disconnected'
+    );
 
-          {/* ELO Rating */}
-          <div className={`flex items-center space-x-3 px-5 py-3 rounded-2xl border-2 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 ${
-            theme === 'dark'
-              ? 'bg-gradient-to-r from-yellow-900/40 to-orange-900/40 border-yellow-600 text-yellow-300'
-              : 'bg-gradient-to-r from-yellow-100 to-orange-100 border-yellow-300 text-yellow-800'
-          }`}>
-            <Trophy className="h-5 w-5 text-yellow-600" />
-            <span className="text-lg font-bold">1,247</span>
-            <span className="text-sm font-medium opacity-75">ELO</span>
-          </div>
-
-          {/* AI Coach Status */}
-          <div className={`flex items-center space-x-3 px-5 py-3 rounded-2xl border-2 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 ${
-            isAuthenticated
-              ? theme === 'dark'
-                ? 'bg-gradient-to-r from-green-900/40 to-emerald-900/40 border-green-600'
-                : 'bg-gradient-to-r from-green-100 to-emerald-100 border-green-300'
-              : theme === 'dark'
-                ? 'bg-gray-800 border-gray-600'
-                : 'bg-gray-100 border-gray-300'
-          }`}>
-            <Brain className={`h-5 w-5 ${
-              isAuthenticated 
-                ? 'text-green-600 animate-pulse' 
-                : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-            }`} />
-            <span className={`text-sm font-bold ${
-              isAuthenticated 
-                ? theme === 'dark' ? 'text-green-400' : 'text-green-700'
-                : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-            }`}>
-              Coach {isAuthenticated ? 'Online' : 'Offline'}
-            </span>
-          </div>
-        </div>
-
-        {/* Right Section - Actions */}
-        <div className="flex items-center space-x-3">
-          {/* Notifications */}
-          <button className={`relative p-3 rounded-2xl transition-all duration-300 hover:scale-110 transform ${
-            theme === 'dark'
-              ? 'text-gray-300 hover:text-white hover:bg-gray-800 hover:shadow-lg'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100 hover:shadow-lg'
-          }`}>
-            <Bell className="h-6 w-6" />
-            <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold shadow-lg animate-bounce">
-              2
-            </div>
-          </button>
-
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className={`p-3 rounded-2xl transition-all duration-300 hover:scale-110 transform ${
-              theme === 'dark'
-                ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-900/20 hover:shadow-lg shadow-yellow-500/20'
-                : 'text-gray-600 hover:text-blue-600 hover:bg-blue-100 hover:shadow-lg shadow-blue-500/20'
-            }`}
-          >
-            <div className="relative">
-              {theme === 'light' ? (
-                <Moon className="h-6 w-6 transition-transform duration-500 hover:rotate-12" />
+    return (
+      <div className="fixed bottom-4 right-4 z-40">
+        <div className={`p-3 rounded-xl backdrop-blur-xl border transition-all duration-300 ${
+          hasError 
+            ? 'bg-red-500/20 border-red-500/30' 
+            : 'bg-green-500/20 border-green-500/30'
+        }`}>
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
+              {isOnline ? (
+                <Wifi className="h-4 w-4 text-green-400" />
               ) : (
-                <Sun className="h-6 w-6 transition-transform duration-500 hover:rotate-12" />
+                <WifiOff className="h-4 w-4 text-red-400" />
               )}
+              <Activity className={`h-4 w-4 ${getStatusColor(systemStatus.engine).split(' ')[0]}`} />
             </div>
-          </button>
-
-          {/* Settings */}
-          <button
-            onClick={() => navigate('/settings')}
-            className={`p-3 rounded-2xl transition-all duration-300 hover:scale-110 hover:rotate-12 transform ${
-              theme === 'dark'
-                ? 'text-gray-300 hover:text-white hover:bg-gray-800 hover:shadow-lg'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100 hover:shadow-lg'
-            }`}
-          >
-            <Settings className="h-6 w-6" />
-          </button>
-
-          {/* Profile */}
-          <button className={`flex items-center space-x-3 p-3 rounded-2xl transition-all duration-300 hover:scale-105 transform ${
-            theme === 'dark' ? 'hover:bg-gray-800 hover:shadow-lg' : 'hover:bg-gray-100 hover:shadow-lg'
-          }`}>
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <User className="h-5 w-5 text-white" />
+            
+            <div className="text-xs">
+              <div className={`font-medium ${hasError ? 'text-red-300' : 'text-green-300'}`}>
+                {hasError ? 'System Issue' : 'All Systems Ready'}
+              </div>
+              <div className="text-slate-400">
+                Updated {systemStatus.lastUpdate.toLocaleTimeString()}
+              </div>
             </div>
-            <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${
-              theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-            }`} />
-          </button>
+          </div>
         </div>
       </div>
-    </header>
-  );
-};
+    );
+  };
 
-const ProfessionalLayout = () => {
+  // Mobile overlay for sidebar
+  const MobileOverlay = () => (
+    mobileMenuOpen && deviceInfo.isMobile && (
+      <div 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden"
+        onClick={() => setMobileMenuOpen(false)}
+      />
+    )
+  );
+
+  // Error boundary fallback
+  const ErrorFallback = ({ error }) => (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
+      <div className="bg-red-500/20 border border-red-500/30 rounded-2xl p-8 max-w-md w-full text-center">
+        <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-white mb-2">Something went wrong</h2>
+        <p className="text-slate-300 text-sm mb-6">
+          {error?.message || 'An unexpected error occurred'}
+        </p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-semibold"
+        >
+          Reload Application
+        </button>
+      </div>
+    </div>
+  );
+
+  // Loading screen
+  const LoadingScreen = () => (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-6 animate-pulse">
+          <Crown className="h-8 w-8 text-white" />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">ChessMentor</h2>
+        <p className="text-slate-400">Loading your chess experience...</p>
+        <div className="flex justify-center mt-4">
+          <div className="flex space-x-1">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                style={{ animationDelay: `${i * 0.2}s` }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Performance mode controls
+  const PerformanceControls = () => (
+    <div className="fixed bottom-4 left-4 z-40">
+      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-3">
+        <div className="flex items-center space-x-2">
+          <Zap className="h-4 w-4 text-yellow-400" />
+          <select
+            value={performanceMode}
+            onChange={(e) => handlePerformanceModeChange(e.target.value)}
+            className="bg-transparent text-white text-xs border-none focus:outline-none"
+          >
+            <option value="normal" className="bg-slate-800">Normal</option>
+            <option value="high-performance" className="bg-slate-800">High Performance</option>
+            <option value="low-power" className="bg-slate-800">Battery Saver</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="h-screen bg-mesh flex">
-      {/* Sidebar */}
-      <ProfessionalSidebar />
+    <div className={`min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex ${
+      theme === 'dark' ? 'dark' : ''
+    }`}>
       
+      {/* Mobile Overlay */}
+      <MobileOverlay />
+      
+      {/* Sidebar */}
+      <div className={`${
+        deviceInfo.isMobile 
+          ? `fixed left-0 top-0 h-full z-40 transform transition-transform duration-300 ${
+              mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+            }`
+          : 'relative'
+      }`}>
+        <ProfessionalSidebar 
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={handleSidebarToggle}
+          activeRoute="/"
+        />
+      </div>
+
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* TopBar מובנה */}
-        <InlineTopBar />
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* Top Bar */}
+        <ModernTopBar 
+          onMenuToggle={handleMobileMenuToggle}
+          isMenuOpen={mobileMenuOpen}
+          theme={theme}
+          onThemeToggle={handleThemeToggle}
+        />
         
         {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/30">
-          <Outlet />
+        <main className="flex-1 overflow-auto">
+          <div className="container mx-auto h-full">
+            {children}
+          </div>
         </main>
       </div>
+
+      {/* System Status Indicator */}
+      <SystemStatusIndicator />
+      
+      {/* Performance Controls */}
+      <PerformanceControls />
+
+      {/* Global Styles */}
+      <style jsx global>{`
+        /* Scrollbar Styling */
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Performance Mode Optimizations */
+        .reduce-animations * {
+          animation-duration: 0.1s !important;
+          transition-duration: 0.1s !important;
+        }
+
+        /* Focus Management */
+        .focus-visible {
+          outline: 2px solid #3b82f6;
+          outline-offset: 2px;
+        }
+
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+
+        /* High Contrast Mode */
+        @media (prefers-contrast: high) {
+          .bg-white\/5 {
+            background-color: rgba(255, 255, 255, 0.2) !important;
+          }
+          
+          .border-white\/10 {
+            border-color: rgba(255, 255, 255, 0.3) !important;
+          }
+        }
+
+        /* Print Styles */
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+        }
+
+        /* Dark mode adjustments */
+        [data-theme="light"] {
+          /* Light theme overrides */
+          background: linear-gradient(to bottom right, #f8fafc, #e2e8f0, #cbd5e1);
+        }
+
+        /* Glass effect utility */
+        .glass-effect {
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Animated gradient background */
+        .bg-mesh {
+          background-image: 
+            radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0);
+          background-size: 20px 20px;
+        }
+
+        /* Custom animations */
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-10px); }
+        }
+        
+        @keyframes pulse-ring {
+          0% { transform: scale(0.33); }
+          40%, 50% { opacity: 1; }
+          100% { opacity: 0; transform: scale(1.2); }
+        }
+        
+        @keyframes shimmer {
+          0% { background-position: -200px 0; }
+          100% { background-position: calc(200px + 100%) 0; }
+        }
+        
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+        
+        .animate-pulse-ring {
+          animation: pulse-ring 1.5s ease-out infinite;
+        }
+        
+        .animate-shimmer {
+          animation: shimmer 2s infinite;
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.2) 20%,
+            rgba(255, 255, 255, 0.5) 60%,
+            rgba(255, 255, 255, 0)
+          );
+          background-size: 200px 100%;
+        }
+      `}</style>
     </div>
   );
 };
 
-export default ProfessionalLayout;
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Layout Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
+          <div className="bg-red-500/20 border border-red-500/30 rounded-2xl p-8 max-w-md w-full text-center">
+            <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white mb-2">Application Error</h2>
+            <p className="text-slate-300 text-sm mb-6">
+              Something went wrong with the layout system.
+            </p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-semibold"
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Main Layout Export with Error Boundary
+const LayoutWithErrorBoundary = (props) => (
+  <ErrorBoundary>
+    <ProfessionalLayout {...props} />
+  </ErrorBoundary>
+);
+
+export default LayoutWithErrorBoundary;

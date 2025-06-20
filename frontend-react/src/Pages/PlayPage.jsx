@@ -1,6 +1,4 @@
-// PlayPage - Updated for Simple Chess API
 import React, { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
 import { 
   RotateCcw, 
   RotateCw, 
@@ -10,17 +8,16 @@ import {
   Trophy,
   Brain,
   Zap,
-  Clock
+  Clock,
+  Target,
+  Cpu,
+  Activity,
+  PlayCircle,
+  Pause
 } from 'lucide-react';
-import ChessBoard from '../components/ChessBoard/ChessBoard';
-import { loadGame, newGame, setPlayerColor, makeMove } from '../store/slices/gameSlice';
-import chessApiService from '../services/chessApiService';
 
-const PlayPage = () => {
-  const dispatch = useDispatch();
-  const { fen, moveCount, playerColor, history, isGameOver } = useSelector(state => state.game);
-  
-  // Local state for API-based game
+const ProfessionalPlayPage = () => {
+  // Game state
   const [aiLevel, setAiLevel] = useState(5);
   const [isGameActive, setIsGameActive] = useState(false);
   const [isStartingGame, setIsStartingGame] = useState(false);
@@ -28,254 +25,230 @@ const PlayPage = () => {
   const [opponent, setOpponent] = useState(null);
   const [error, setError] = useState(null);
   const [gameResult, setGameResult] = useState(null);
+  const [playerColor, setPlayerColor] = useState('white');
+  const [moveCount, setMoveCount] = useState(0);
+  const [gameTime, setGameTime] = useState(0);
 
-  // Initialize service status
-  useEffect(() => {
-    const checkGameStatus = () => {
-      const isActive = chessApiService.isGameActive();
-      setIsGameActive(isActive);
-      
-      if (!isActive) {
-        setOpponent(null);
-        setGameResult(null);
-      }
+  // Mock chess board (8x8 grid)
+  const createInitialBoard = () => {
+    const pieces = {
+      'a8': '♜', 'b8': '♞', 'c8': '♝', 'd8': '♛', 'e8': '♚', 'f8': '♝', 'g8': '♞', 'h8': '♜',
+      'a7': '♟', 'b7': '♟', 'c7': '♟', 'd7': '♟', 'e7': '♟', 'f7': '♟', 'g7': '♟', 'h7': '♟',
+      'a2': '♙', 'b2': '♙', 'c2': '♙', 'd2': '♙', 'e2': '♙', 'f2': '♙', 'g2': '♙', 'h2': '♙',
+      'a1': '♖', 'b1': '♘', 'c1': '♗', 'd1': '♕', 'e1': '♔', 'f1': '♗', 'g1': '♘', 'h1': '♖'
     };
-    
-    checkGameStatus();
-  }, []);
 
-  // Handle moves from ChessBoard component
-  const handleMove = async (move) => {
-    if (!isGameActive || aiThinking || isGameOver) {
-      console.log('🚫 Move blocked:', { isGameActive, aiThinking, isGameOver });
-      return Promise.resolve(false);
-    }
-
-    try {
-      setError(null);
-      setAiThinking(true);
-      
-      console.log('🎯 PlayPage: Making move:', move);
-      
-      // Make move via API
-      const result = await chessApiService.makeMove(move);
-      
-      if (result.success) {
-        // Update Redux state with new position
-        dispatch(loadGame({ 
-          fen: result.position.fen,
-          history: [] // We'll track history differently for API games
-        }));
-        
-        // Add moves to Redux for display
-        if (result.player_move) {
-          console.log(`♟️ Player: ${result.player_move.move} (${result.player_move.san})`);
-        }
-        
-        if (result.ai_move) {
-          console.log(`🤖 AI: ${result.ai_move.move} (${result.ai_move.san})`);
-        }
-        
-        // Check if game ended
-        if (result.game_over) {
-          setGameResult(result.game_result);
-          setIsGameActive(false);
-          console.log(`🏁 Game Over: ${result.game_result}`);
-        }
-        
-        setAiThinking(false);
-        return Promise.resolve(true);
-      } else {
-        setError('Invalid move');
-        setAiThinking(false);
-        return Promise.resolve(false);
-      }
-    } catch (error) {
-      console.error('❌ Move error:', error);
-      setError(error.response?.data?.detail || error.message || 'Move failed');
-      setAiThinking(false);
-      return Promise.resolve(false);
-    }
-  };
-
-  const handleNewGame = async () => {
-    try {
-      setIsStartingGame(true);
-      setError(null);
-      setGameResult(null);
-      
-      console.log(`🎮 Starting new game - AI Level ${aiLevel}`);
-      
-      // Start new game via API
-      const result = await chessApiService.newGame(aiLevel, 'white');
-      
-      if (result.success) {
-        // Update Redux with initial position
-        dispatch(newGame());
-        dispatch(setPlayerColor('white'));
-        dispatch(loadGame({ 
-          fen: result.position.fen,
-          history: []
-        }));
-        
-        // Update local state
-        setIsGameActive(true);
-        setOpponent({
-          name: `ChessMentor AI (Level ${result.ai_level})`,
-          elo: result.ai_elo,
-          level: result.ai_level
+    const board = [];
+    for (let rank = 8; rank >= 1; rank--) {
+      const row = [];
+      for (let file = 0; file < 8; file++) {
+        const square = String.fromCharCode(97 + file) + rank;
+        const isLight = (rank + file) % 2 === 0;
+        row.push({
+          square,
+          piece: pieces[square] || null,
+          isLight,
+          isHighlighted: false
         });
-        
-        // If AI made first move (player is black)
-        if (result.ai_move) {
-          console.log(`🤖 AI opened with: ${result.ai_move.move}`);
-        }
-        
-        console.log(`✅ Game started: ${result.game_id.slice(0, 8)}`);
       }
-    } catch (error) {
-      console.error('❌ Failed to start game:', error);
-      setError(error.response?.data?.detail || error.message || 'Failed to start game');
-    } finally {
-      setIsStartingGame(false);
+      board.push(row);
     }
+    return board;
   };
 
-  const handleResign = async () => {
-    if (!isGameActive) return;
-    
-    try {
-      setError(null);
-      const result = await chessApiService.resign();
-      
-      if (result.success) {
-        setGameResult(result.result);
-        setIsGameActive(false);
-        console.log(`🏳️ Resigned: ${result.result}`);
-      }
-    } catch (error) {
-      console.error('❌ Resign error:', error);
-      setError(error.response?.data?.detail || error.message || 'Resign failed');
-    }
-  };
+  const [board, setBoard] = useState(createInitialBoard());
 
-  const handleFlipBoard = () => {
-    const newColor = playerColor === 'white' ? 'black' : 'white';
-    dispatch(setPlayerColor(newColor));
-  };
-
-  const handleAILevelChange = (newLevel) => {
-    if (isGameActive) {
-      setError('Cannot change AI level during game');
-      return;
+  // Mock game timer
+  useEffect(() => {
+    let interval;
+    if (isGameActive && !aiThinking && !gameResult) {
+      interval = setInterval(() => {
+        setGameTime(prev => prev + 1);
+      }, 1000);
     }
-    setAiLevel(newLevel);
-    console.log(`🎯 AI level set to: ${newLevel}`);
-  };
+    return () => clearInterval(interval);
+  }, [isGameActive, aiThinking, gameResult]);
 
   const aiLevels = [
-    { level: 1, name: 'Beginner', elo: '800', description: 'Very easy, good for learning' },
-    { level: 2, name: 'Novice', elo: '1000', description: 'Easy, makes obvious mistakes' },
-    { level: 3, name: 'Amateur', elo: '1200', description: 'Casual player level' },
-    { level: 4, name: 'Club Player', elo: '1400', description: 'Intermediate level' },
-    { level: 5, name: 'Strong Club', elo: '1600', description: 'Challenging for most players' },
-    { level: 6, name: 'Expert', elo: '1800', description: 'Advanced level' },
-    { level: 7, name: 'Master', elo: '2000', description: 'Very strong player' },
-    { level: 8, name: 'Strong Master', elo: '2200', description: 'Expert level play' },
-    { level: 9, name: 'Grandmaster', elo: '2400', description: 'Professional strength' },
-    { level: 10, name: 'Super GM', elo: '2600+', description: 'Maximum engine strength' }
+    { level: 1, name: 'Beginner', elo: '800', description: 'Perfect for learning', color: 'from-green-500/20 to-emerald-500/20', stars: 1 },
+    { level: 2, name: 'Novice', elo: '1000', description: 'Easy opponent', color: 'from-green-500/20 to-emerald-500/20', stars: 1 },
+    { level: 3, name: 'Amateur', elo: '1200', description: 'Casual play', color: 'from-blue-500/20 to-cyan-500/20', stars: 2 },
+    { level: 4, name: 'Club Player', elo: '1400', description: 'Intermediate challenge', color: 'from-blue-500/20 to-cyan-500/20', stars: 2 },
+    { level: 5, name: 'Strong Club', elo: '1600', description: 'Solid opponent', color: 'from-purple-500/20 to-violet-500/20', stars: 3 },
+    { level: 6, name: 'Expert', elo: '1800', description: 'Advanced play', color: 'from-purple-500/20 to-violet-500/20', stars: 3 },
+    { level: 7, name: 'Master', elo: '2000', description: 'Strong master', color: 'from-orange-500/20 to-red-500/20', stars: 4 },
+    { level: 8, name: 'Strong Master', elo: '2200', description: 'Expert level', color: 'from-orange-500/20 to-red-500/20', stars: 4 },
+    { level: 9, name: 'Grandmaster', elo: '2400', description: 'Professional level', color: 'from-red-500/20 to-pink-500/20', stars: 5 },
+    { level: 10, name: 'Super GM', elo: '2600+', description: 'Maximum strength', color: 'from-red-500/20 to-pink-500/20', stars: 5 }
   ];
 
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleNewGame = () => {
+    setIsStartingGame(true);
+    setError(null);
+    setTimeout(() => {
+      setIsGameActive(true);
+      setIsStartingGame(false);
+      setOpponent({
+        name: `Stockfish Level ${aiLevel}`,
+        elo: aiLevels[aiLevel - 1].elo,
+        level: aiLevel
+      });
+      setMoveCount(0);
+      setGameTime(0);
+      setGameResult(null);
+    }, 1500);
+  };
+
+  const handleResign = () => {
+    setGameResult('You resigned');
+    setIsGameActive(false);
+  };
+
+  const ChessSquare = ({ square, piece, isLight, isHighlighted }) => (
+    <div 
+      className={`
+        aspect-square flex items-center justify-center text-4xl font-bold cursor-pointer
+        transition-all duration-200 hover:scale-105 border border-slate-600/20
+        ${isLight ? 'bg-slate-200' : 'bg-slate-400'}
+        ${isHighlighted ? 'ring-2 ring-blue-400 ring-opacity-70' : ''}
+        hover:brightness-110
+      `}
+    >
+      {piece && (
+        <span className="drop-shadow-lg hover:scale-110 transition-transform duration-200">
+          {piece}
+        </span>
+      )}
+    </div>
+  );
+
+  const ChessBoard = () => (
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-white/10 shadow-2xl">
+      <div className="grid grid-cols-8 gap-0 max-w-[480px] mx-auto rounded-lg overflow-hidden shadow-inner bg-slate-300">
+        {board.flat().map((square, index) => (
+          <ChessSquare
+            key={square.square}
+            square={square.square}
+            piece={square.piece}
+            isLight={square.isLight}
+            isHighlighted={square.isHighlighted}
+          />
+        ))}
+      </div>
+      
+      {/* Board coordinates */}
+      <div className="flex justify-between mt-2 px-2">
+        {['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(file => (
+          <span key={file} className="text-slate-400 text-sm font-mono w-[60px] text-center">
+            {file}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="h-full flex bg-mesh">
-      {/* Game Setup Panel */}
-      <div className="w-80 modern-card border-r border-gray-200 flex flex-col">
-        {/* Game Status */}
-        <div className="p-6 border-b border-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
+      {/* Left Sidebar - Game Controls */}
+      <div className="w-80 bg-white/5 backdrop-blur-xl border-r border-white/10 flex flex-col">
+        
+        {/* Game Status Header */}
+        <div className="p-6 border-b border-white/10">
           <div className="flex items-center space-x-3 mb-4">
             <div className={`w-3 h-3 rounded-full ${
-              isGameActive ? 'bg-green-400 animate-pulse' : 
-              isStartingGame ? 'bg-yellow-400 animate-pulse' :
-              'bg-gray-400'
+              isGameActive ? 'bg-green-400 animate-pulse shadow-lg shadow-green-400/50' : 
+              isStartingGame ? 'bg-yellow-400 animate-pulse shadow-lg shadow-yellow-400/50' :
+              'bg-slate-500'
             }`}></div>
-            <span className="text-sm font-medium">
+            <span className="text-white font-semibold">
               {isGameActive ? 'Game Active' : 
-               isStartingGame ? 'Starting...' : 
+               isStartingGame ? 'Initializing...' : 
                'Ready to Play'}
             </span>
-            <div className="flex items-center text-xs text-blue-600">
-              <Brain className="h-3 w-3 mr-1" />
-              Stockfish API
+            <div className="flex items-center text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded-full border border-blue-400/20">
+              <Cpu className="h-3 w-3 mr-1" />
+              Stockfish
             </div>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm mb-4">
-              {error}
-              <button 
-                onClick={() => setError(null)}
-                className="ml-2 text-red-500 hover:text-red-700"
-              >
-                ×
-              </button>
+            <div className="bg-red-500/20 border border-red-500/30 text-red-300 px-3 py-2 rounded-lg text-sm mb-4">
+              <div className="flex items-center justify-between">
+                <span>{error}</span>
+                <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">×</button>
+              </div>
             </div>
           )}
 
           {opponent && isGameActive && (
-            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded-lg text-sm mb-4">
+            <div className="bg-blue-500/20 border border-blue-500/30 text-blue-300 px-3 py-2 rounded-lg text-sm mb-4">
               <div className="flex items-center justify-between">
-                <span>🤖 {opponent.name}</span>
-                <span className="flex items-center">
-                  <Trophy className="h-3 w-3 mr-1" />
-                  {opponent.elo}
-                </span>
+                <div>
+                  <div className="font-semibold">🤖 {opponent.name}</div>
+                  <div className="text-xs opacity-80">ELO: {opponent.elo}</div>
+                </div>
+                <Trophy className="h-4 w-4" />
               </div>
             </div>
           )}
 
           {aiThinking && isGameActive && (
-            <div className="bg-purple-50 border border-purple-200 text-purple-700 px-3 py-2 rounded-lg text-sm mb-4">
+            <div className="bg-purple-500/20 border border-purple-500/30 text-purple-300 px-3 py-2 rounded-lg text-sm mb-4">
               <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
-                AI is thinking...
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-400 mr-2"></div>
+                <span>AI analyzing position...</span>
               </div>
             </div>
           )}
 
           {gameResult && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg text-sm mb-4">
-              <div className="font-medium">🏁 Game Over</div>
-              <div className="text-sm">{gameResult}</div>
+            <div className="bg-green-500/20 border border-green-500/30 text-green-300 px-3 py-2 rounded-lg text-sm mb-4">
+              <div className="font-semibold">🏁 Game Complete</div>
+              <div className="text-xs">{gameResult}</div>
             </div>
           )}
         </div>
 
         {/* AI Level Selection */}
-        <div className="p-6 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">AI Difficulty</h3>
+        <div className="p-6 border-b border-white/10 flex-1 overflow-y-auto">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+            <Brain className="h-5 w-5 mr-2 text-blue-400" />
+            Engine Difficulty
+          </h3>
           
-          <div className="space-y-2 max-h-64 overflow-y-auto">
+          <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
             {aiLevels.map((level) => (
               <button
                 key={level.level}
-                onClick={() => handleAILevelChange(level.level)}
+                onClick={() => !isGameActive && setAiLevel(level.level)}
                 disabled={isGameActive || isStartingGame}
-                className={`w-full text-left p-3 rounded-lg border-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`w-full text-left p-4 rounded-xl border transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
                   aiLevel === level.level
-                    ? 'bg-blue-50 border-blue-500 text-blue-900'
-                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                    ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-blue-400/50 text-blue-300 shadow-lg'
+                    : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:border-white/20'
                 }`}
               >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-medium">{level.name}</div>
-                    <div className="text-sm opacity-75">{level.description}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-mono">ELO {level.elo}</div>
-                    <div className="text-lg">
-                      {'★'.repeat(Math.min(level.level, 5))}
-                      {'☆'.repeat(Math.max(0, 5 - level.level))}
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span className="font-bold">{level.name}</span>
+                      <div className="flex">
+                        {[...Array(5)].map((_, i) => (
+                          <span key={i} className={`text-xs ${i < level.stars ? 'text-yellow-400' : 'text-slate-600'}`}>
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-sm opacity-75 mb-2">{level.description}</div>
+                    <div className="text-xs font-mono bg-slate-700/50 px-2 py-1 rounded">
+                      ELO: {level.elo}
                     </div>
                   </div>
                 </div>
@@ -285,149 +258,131 @@ const PlayPage = () => {
         </div>
 
         {/* Game Controls */}
-        <div className="p-6 border-b border-gray-100">
-          <h4 className="text-md font-semibold text-gray-900 mb-4">Game Controls</h4>
+        <div className="p-6">
           <div className="space-y-3">
             <button
               onClick={handleNewGame}
               disabled={isStartingGame}
-              className="w-full flex items-center justify-center space-x-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center space-x-3 px-4 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl font-semibold"
             >
               {isStartingGame ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span>Starting...</span>
+                  <span>Initializing Engine...</span>
                 </>
               ) : (
                 <>
-                  <Square className="h-5 w-5" />
-                  <span className="font-medium">New Game</span>
+                  <PlayCircle className="h-5 w-5" />
+                  <span>New Game</span>
                 </>
               )}
             </button>
             
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                onClick={handleFlipBoard}
-                className="flex items-center justify-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-              >
+            <div className="grid grid-cols-2 gap-2">
+              <button className="flex items-center justify-center space-x-2 px-3 py-3 bg-white/10 text-slate-300 rounded-xl hover:bg-white/20 transition-all duration-300 border border-white/10">
                 <RotateCw className="h-4 w-4" />
-                <span className="text-sm">Flip Board</span>
+                <span className="text-sm">Flip</span>
+              </button>
+              <button className="flex items-center justify-center space-x-2 px-3 py-3 bg-white/10 text-slate-300 rounded-xl hover:bg-white/20 transition-all duration-300 border border-white/10">
+                <Settings className="h-4 w-4" />
+                <span className="text-sm">Setup</span>
               </button>
             </div>
 
             {isGameActive && (
               <button
                 onClick={handleResign}
-                className="w-full flex items-center space-x-3 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                className="w-full flex items-center space-x-3 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-lg"
               >
                 <Flag className="h-5 w-5" />
-                <span className="font-medium">Resign</span>
+                <span className="font-semibold">Resign Game</span>
               </button>
             )}
-          </div>
-        </div>
-
-        {/* Game Information */}
-        <div className="p-6 flex-1">
-          <h4 className="text-md font-semibold text-gray-900 mb-4">Game Information</h4>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Status</span>
-              <span className={`font-medium px-2 py-1 rounded text-xs ${
-                isGameActive ? 'bg-green-100 text-green-800' :
-                gameResult ? 'bg-gray-100 text-gray-800' :
-                'bg-blue-100 text-blue-800'
-              }`}>
-                {isGameActive ? 'Playing' :
-                 gameResult ? 'Finished' : 'Ready'}
-              </span>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Moves</span>
-              <span className="font-medium text-gray-900">{moveCount}</span>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Playing as</span>
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  playerColor === 'white' ? 'bg-gray-100 border-2 border-gray-400' : 'bg-gray-800'
-                }`}></div>
-                <span className="font-medium text-gray-900 capitalize">{playerColor}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">AI Level</span>
-              <span className="font-medium text-gray-900">{aiLevel}/10</span>
-            </div>
-
-            {chessApiService.getCurrentGameId() && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Game ID</span>
-                <span className="font-mono text-xs text-gray-500">
-                  {chessApiService.getCurrentGameId().slice(0, 8)}...
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* API Service Status */}
-          <div className="mt-6 p-3 bg-gray-50 rounded-lg">
-            <div className="text-xs text-gray-600 space-y-1">
-              <div>🔗 API: localhost:5001</div>
-              <div>🤖 Engine: Stockfish</div>
-              <div>⚡ Mode: HTTP REST</div>
-            </div>
           </div>
         </div>
       </div>
 
       {/* Main Game Area */}
       <div className="flex-1 flex flex-col">
-        {/* Game Header */}
-        <div className="modern-card border-b border-gray-200 p-4">
+        
+        {/* Top Bar */}
+        <div className="bg-white/5 backdrop-blur-xl border-b border-white/10 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {opponent ? `Playing vs ${opponent.name}` : 'Chess vs AI'}
+              <h2 className="text-2xl font-bold text-white">
+                {opponent ? `vs ${opponent.name}` : 'Chess Engine'}
               </h2>
-              <p className="text-gray-600">
-                {isGameActive ? `Move ${Math.ceil(moveCount / 2)} - ${
-                  moveCount % 2 === 0 ? 'Your turn' : "AI's turn"
-                }` : 'Ready to start a new game'}
+              <p className="text-slate-400">
+                {isGameActive ? `Move ${Math.ceil(moveCount / 2)} • ${
+                  moveCount % 2 === 0 ? 'Your turn' : "Engine's turn"
+                } • ${formatTime(gameTime)}` : 'Select difficulty and start playing'}
               </p>
             </div>
             
-            <div className="flex items-center space-x-2">
-              {aiThinking && (
-                <div className="flex items-center text-purple-600">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
-                  <span className="text-sm">AI Thinking</span>
+            <div className="flex items-center space-x-4">
+              {/* Game Stats */}
+              <div className="flex items-center space-x-4 text-sm">
+                <div className="flex items-center space-x-2 text-slate-300">
+                  <Clock className="h-4 w-4" />
+                  <span>{formatTime(gameTime)}</span>
                 </div>
-              )}
-              <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <Settings className="h-5 w-5" />
-              </button>
+                <div className="flex items-center space-x-2 text-slate-300">
+                  <Target className="h-4 w-4" />
+                  <span>{moveCount} moves</span>
+                </div>
+                {aiThinking && (
+                  <div className="flex items-center space-x-2 text-purple-400">
+                    <Activity className="h-4 w-4 animate-pulse" />
+                    <span>Thinking</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Chess Board */}
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-2xl w-full">
-            <ChessBoard 
-              onMove={handleMove}
-              disabled={!isGameActive || aiThinking}
-            />
+        <div className="flex-1 flex items-center justify-center p-8">
+          <ChessBoard />
+        </div>
+
+        {/* Bottom Status */}
+        <div className="bg-white/5 backdrop-blur-xl border-t border-white/10 p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+            <div>
+              <div className="text-2xl font-bold text-blue-400">Level {aiLevel}</div>
+              <div className="text-sm text-slate-400">Engine Difficulty</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-green-400">{formatTime(gameTime)}</div>
+              <div className="text-sm text-slate-400">Game Duration</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-yellow-400">{moveCount}</div>
+              <div className="text-sm text-slate-400">Moves Played</div>
+            </div>
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.5);
+        }
+      `}</style>
     </div>
   );
 };
 
-export default PlayPage;
+export default ProfessionalPlayPage;

@@ -1,4 +1,3 @@
-// HomePage - landing screen with feature cards
 import React, { useState, useEffect } from 'react';
 import { 
   Play, 
@@ -12,10 +11,12 @@ import {
   ChevronRight,
   Sparkles,
   Brain,
-  Gamepad2
+  Gamepad2,
+  Clock,
+  Star
 } from 'lucide-react';
 
-const ModernHomePage = () => {
+const ProfessionalHomePage = () => {
   const [animatedValue, setAnimatedValue] = useState(0);
   const [hoveredCard, setHoveredCard] = useState(null);
 
@@ -30,113 +31,130 @@ const ModernHomePage = () => {
     { 
       id: 'ai-coach',
       title: 'AI Coach', 
-      subtitle: 'Get personalized training',
+      subtitle: 'Personal chess mentor',
       icon: Bot, 
-      gradient: 'from-purple-500 via-violet-600 to-purple-700',
-      shadowColor: 'shadow-purple-500/25',
-      pulse: true
+      gradient: 'from-slate-700 via-slate-800 to-slate-900',
+      glowColor: 'shadow-purple-500/20',
+      iconColor: 'text-purple-400'
     },
     { 
       id: 'daily-puzzle',
       title: 'Daily Puzzle', 
-      subtitle: 'Solve today\'s tactical challenge',
+      subtitle: 'Sharpen your tactics',
       icon: Puzzle, 
-      gradient: 'from-orange-500 via-red-500 to-pink-600',
-      shadowColor: 'shadow-orange-500/25',
+      gradient: 'from-slate-700 via-slate-800 to-slate-900',
+      glowColor: 'shadow-orange-500/20',
+      iconColor: 'text-orange-400',
       badge: 'New'
     },
     { 
       id: 'quick-play',
-      title: 'Quick Play', 
-      subtitle: 'Start a new game against AI',
+      title: 'Play vs AI', 
+      subtitle: 'Challenge Stockfish engine',
       icon: Play, 
-      gradient: 'from-green-500 via-emerald-600 to-teal-700',
-      shadowColor: 'shadow-green-500/25',
+      gradient: 'from-slate-700 via-slate-800 to-slate-900',
+      glowColor: 'shadow-green-500/20',
+      iconColor: 'text-green-400',
       isActive: true
     }
   ];
 
   const stats = [
     { 
-      title: 'Best Streak', 
-      value: '8', 
-      change: '+2',
-      icon: Zap, 
-      color: 'amber',
-      gradient: 'from-amber-400 to-orange-500'
+      title: 'Current Rating', 
+      value: '1,247', 
+      change: '+23',
+      icon: Crown, 
+      gradient: 'from-slate-800/50 to-slate-700/50',
+      accentColor: 'text-yellow-400'
     },
     { 
       title: 'Win Rate', 
       value: '67%', 
       change: '+5%',
       icon: Target, 
-      color: 'emerald',
-      gradient: 'from-emerald-400 to-green-500'
+      gradient: 'from-slate-800/50 to-slate-700/50',
+      accentColor: 'text-emerald-400'
+    },
+    { 
+      title: 'Best Streak', 
+      value: '8', 
+      change: '+2',
+      icon: Zap, 
+      gradient: 'from-slate-800/50 to-slate-700/50',
+      accentColor: 'text-amber-400'
     },
     { 
       title: 'Games Today', 
       value: '3', 
       change: '+1',
       icon: Gamepad2, 
-      color: 'blue',
-      gradient: 'from-blue-400 to-indigo-500'
-    },
-    { 
-      title: 'Current ELO', 
-      value: '1,247', 
-      change: '+23',
-      icon: Crown, 
-      color: 'violet',
-      gradient: 'from-violet-400 to-purple-500'
+      gradient: 'from-slate-800/50 to-slate-700/50',
+      accentColor: 'text-blue-400'
     },
   ];
 
-  const MovesCounter = () => (
+  const WelcomeHero = () => (
     <div className="relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/5 to-indigo-700/10 rounded-2xl blur-xl transform scale-110"></div>
-      <div className="relative bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 rounded-2xl p-8 text-white shadow-2xl border border-white/10">
-        {/* Background Pattern */}
-        <div className="absolute top-0 right-0 opacity-10 transform rotate-12">
-          <div className="grid grid-cols-8 gap-1 p-4">
-            {Array.from({length: 32}).map((_, i) => (
-              <div key={i} className={`w-3 h-3 ${i % 2 === 0 ? 'bg-white' : 'bg-transparent'} rounded-sm`}></div>
-            ))}
-          </div>
+      {/* Background Glass Effect */}
+      <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-800/90 to-slate-900/90 backdrop-blur-xl rounded-2xl border border-white/10"></div>
+      
+      {/* Floating Chess Pattern */}
+      <div className="absolute top-0 right-0 opacity-5 transform rotate-12 scale-150">
+        <div className="grid grid-cols-8 gap-1 p-8">
+          {Array.from({length: 64}).map((_, i) => (
+            <div key={i} className={`w-4 h-4 ${i % 2 === 0 ? 'bg-white' : 'bg-transparent'} rounded-sm`}></div>
+          ))}
         </div>
-        
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="space-y-3">
+      </div>
+      
+      <div className="relative z-10 p-8">
+        <div className="flex items-center justify-between">
+          <div className="space-y-4">
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-                <span className="text-blue-100 text-sm font-medium">Move 1 Active</span>
+                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
+                <span className="text-slate-300 text-sm font-medium tracking-wide">SYSTEM READY</span>
               </div>
             </div>
-            <h1 className="text-3xl font-bold leading-tight">
-              👋 Welcome back, Player!
-            </h1>
-            <p className="text-blue-100 text-lg">Ready to improve your chess game today?</p>
+            <div>
+              <h1 className="text-4xl font-black text-white leading-tight tracking-tight">
+                Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Player</span>
+              </h1>
+              <p className="text-slate-300 text-lg mt-2 font-light">Your chess mastery journey continues</p>
+            </div>
+            
+            <div className="flex items-center space-x-6 text-sm text-slate-400">
+              <div className="flex items-center space-x-2">
+                <Clock className="h-4 w-4" />
+                <span>Last active: 2 hours ago</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Sparkles className="h-4 w-4" />
+                <span>5-game win streak</span>
+              </div>
+            </div>
           </div>
           
           <div className="text-right">
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
-              <div className="text-4xl font-black mb-2">1</div>
-              <div className="text-sm text-blue-200">Moves Played</div>
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-white/20 transition-all duration-300 group">
+              <div className="text-5xl font-black text-white mb-2 group-hover:scale-105 transition-transform duration-300">1</div>
+              <div className="text-sm text-slate-400 uppercase tracking-wider">Active Session</div>
             </div>
           </div>
         </div>
 
-        {/* Floating particles animation */}
+        {/* Floating Particles */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(6)].map((_, i) => (
+          {[...Array(8)].map((_, i) => (
             <div
               key={i}
-              className="absolute w-1 h-1 bg-white/30 rounded-full animate-float"
+              className="absolute w-1 h-1 bg-white/20 rounded-full animate-float"
               style={{
-                left: `${20 + i * 15}%`,
-                top: `${30 + (i % 2) * 40}%`,
-                animationDelay: `${i * 0.5}s`,
-                animationDuration: `${3 + i * 0.5}s`
+                left: `${15 + i * 12}%`,
+                top: `${20 + (i % 3) * 30}%`,
+                animationDelay: `${i * 0.8}s`,
+                animationDuration: `${4 + i * 0.3}s`
               }}
             ></div>
           ))}
@@ -146,10 +164,10 @@ const ModernHomePage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-mesh p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 space-y-8 max-w-7xl mx-auto">
 
-      {/* Hero Section */}
-      <MovesCounter />
+      {/* Welcome Hero */}
+      <WelcomeHero />
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -160,57 +178,49 @@ const ModernHomePage = () => {
           return (
             <div
               key={action.id}
-              className={`
-                group relative cursor-pointer transform transition-all duration-300 
-                ${isHovered ? 'scale-105 -translate-y-2' : 'hover:scale-102'}
-              `}
+              className="group relative cursor-pointer transform transition-all duration-500 hover:scale-105"
               onMouseEnter={() => setHoveredCard(action.id)}
               onMouseLeave={() => setHoveredCard(null)}
             >
-              {/* Glow effect */}
+              {/* Glass Card */}
               <div className={`
-                absolute inset-0 bg-gradient-to-r ${action.gradient} rounded-2xl blur-lg opacity-30 
-                group-hover:opacity-50 transition-opacity duration-300 scale-110
-              `}></div>
-              
-              {/* Card */}
-              <div className={`
-                relative bg-gradient-to-br ${action.gradient} p-6 rounded-2xl text-white 
-                shadow-xl ${action.shadowColor} border border-white/20 backdrop-blur-sm
-                ${action.pulse ? 'animate-pulse' : ''}
+                relative bg-gradient-to-br ${action.gradient} backdrop-blur-xl p-6 rounded-2xl 
+                border border-white/10 shadow-2xl ${action.glowColor} hover:border-white/20
+                transition-all duration-500 group-hover:shadow-3xl
               `}>
+                
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                    <Icon className="h-6 w-6" />
+                  <div className={`p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10 group-hover:bg-white/20 transition-all duration-300`}>
+                    <Icon className={`h-6 w-6 ${action.iconColor}`} />
                   </div>
                   
                   {action.badge && (
-                    <div className="px-3 py-1 bg-white/20 rounded-full text-xs font-semibold backdrop-blur-sm border border-white/30">
+                    <div className="px-3 py-1 bg-orange-500/20 text-orange-300 rounded-full text-xs font-semibold backdrop-blur-sm border border-orange-500/30">
                       {action.badge}
                     </div>
                   )}
                   
                   {action.isActive && (
-                    <div className="flex items-center space-x-1 text-green-200">
-                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                      <span className="text-xs font-medium">Active</span>
+                    <div className="flex items-center space-x-1 text-green-400">
+                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
+                      <span className="text-xs font-medium">Live</span>
                     </div>
                   )}
                 </div>
                 
-                <h3 className="text-xl font-bold mb-2">{action.title}</h3>
-                <p className="text-white/80 text-sm mb-4">{action.subtitle}</p>
-                
-                <div className="flex items-center text-white/90 font-medium group-hover:translate-x-1 transition-transform duration-200">
-                  <span className="text-sm">Get Started</span>
-                  <ChevronRight className="h-4 w-4 ml-1" />
+                <div className="space-y-3">
+                  <h3 className="text-xl font-bold text-white">{action.title}</h3>
+                  <p className="text-slate-300 text-sm">{action.subtitle}</p>
+                  
+                  <div className="flex items-center text-slate-400 font-medium group-hover:text-white group-hover:translate-x-1 transition-all duration-300">
+                    <span className="text-sm">Launch</span>
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </div>
                 </div>
 
-                {/* Sparkle effect on hover */}
+                {/* Hover Glow Effect */}
                 {isHovered && (
-                  <div className="absolute top-4 right-4">
-                    <Sparkles className="h-5 w-5 text-white/60 animate-spin" />
-                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent rounded-2xl"></div>
                 )}
               </div>
             </div>
@@ -226,75 +236,72 @@ const ModernHomePage = () => {
           return (
             <div
               key={index}
-              className="group relative bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/60 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+              className="group relative bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10 hover:border-white/20 transition-all duration-500 hover:bg-white/10"
             >
-              {/* Gradient border effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl blur-sm"></div>
+              <div className="flex items-center justify-between mb-4">
+                <div className={`p-3 rounded-xl bg-gradient-to-r ${stat.gradient} border border-white/10`}>
+                  <Icon className={`h-5 w-5 ${stat.accentColor}`} />
+                </div>
+                <div className={`text-sm font-bold px-2 py-1 rounded-full ${
+                  stat.change.startsWith('+') 
+                    ? 'text-green-400 bg-green-400/10 border border-green-400/20' 
+                    : 'text-red-400 bg-red-400/10 border border-red-400/20'
+                }`}>
+                  {stat.change}
+                </div>
+              </div>
               
-              <div className="relative">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-3 rounded-xl bg-gradient-to-r ${stat.gradient} text-white shadow-lg`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className={`text-sm font-bold px-2 py-1 rounded-full ${
-                    stat.change.startsWith('+') ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
-                  }`}>
-                    {stat.change}
-                  </div>
+              <div className="space-y-2">
+                <div className="text-3xl font-black text-white group-hover:scale-105 transition-transform duration-300">
+                  {stat.value}
                 </div>
-                
-                <div className="space-y-2">
-                  <div className="text-3xl font-black text-gray-900 group-hover:scale-105 transition-transform duration-200">
-                    {stat.value}
-                  </div>
-                  <div className="text-gray-600 text-sm font-medium">{stat.title}</div>
-                </div>
+                <div className="text-slate-400 text-sm font-medium">{stat.title}</div>
+              </div>
 
-                {/* Progress bar animation */}
-                <div className="mt-4 h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full bg-gradient-to-r ${stat.gradient} rounded-full transition-all duration-1000 ease-out`}
-                    style={{ width: `${60 + (animatedValue % 40)}%` }}
-                  ></div>
-                </div>
+              {/* Progress Indicator */}
+              <div className="mt-4 h-1 bg-slate-700 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full bg-gradient-to-r ${stat.gradient} rounded-full transition-all duration-1000 ease-out`}
+                  style={{ width: `${60 + (animatedValue % 40)}%` }}
+                ></div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Bottom Section */}
+      {/* Bottom Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* AI Coach Status */}
-        <div className="lg:col-span-2 bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/60 shadow-lg">
+        <div className="lg:col-span-2 bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10">
           <div className="flex items-center space-x-3 mb-6">
-            <div className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl text-white shadow-lg">
-              <Brain className="h-6 w-6" />
+            <div className="p-3 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-xl border border-purple-500/20">
+              <Brain className="h-6 w-6 text-purple-400" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-gray-900">AI Coach</h3>
-              <p className="text-gray-600">Your personal chess mentor</p>
+              <h3 className="text-xl font-bold text-white">AI Chess Coach</h3>
+              <p className="text-slate-400">Advanced Stockfish-powered analysis</p>
             </div>
             <div className="flex-1"></div>
-            <div className="flex items-center space-x-2 px-3 py-1 bg-green-50 text-green-700 rounded-full border border-green-200">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium">Online</span>
+            <div className="flex items-center space-x-2 px-3 py-1 bg-green-400/10 text-green-400 rounded-full border border-green-400/20">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-sm font-medium">Ready</span>
             </div>
           </div>
           
-          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-100">
-            <h4 className="font-semibold text-purple-900 mb-2">Ready to analyze your game</h4>
-            <p className="text-purple-700 text-sm">
-              Your AI coach has reviewed your recent performance and is ready with personalized insights.
+          <div className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-xl p-4 border border-purple-500/20">
+            <h4 className="font-semibold text-purple-300 mb-2">System Status</h4>
+            <p className="text-slate-300 text-sm">
+              Engine initialized and ready for deep position analysis. Stockfish depth: 15+
             </p>
           </div>
         </div>
 
-        {/* Recent Games Preview */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/60 shadow-lg">
+        {/* Recent Activity */}
+        <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/10">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold text-gray-900">Recent Games</h3>
-            <button className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center">
+            <h3 className="text-xl font-bold text-white">Recent Games</h3>
+            <button className="text-blue-400 hover:text-blue-300 text-sm font-medium flex items-center transition-colors">
               View All
               <ChevronRight className="h-4 w-4 ml-1" />
             </button>
@@ -302,28 +309,28 @@ const ModernHomePage = () => {
           
           <div className="space-y-3">
             {[
-              { opponent: 'AI Level 5', result: 'Win', time: '12 min', rating: '+15' },
-              { opponent: 'AI Level 4', result: 'Loss', time: '8 min', rating: '-12' },
-              { opponent: 'AI Level 6', result: 'Win', time: '15 min', rating: '+18' }
+              { opponent: 'Stockfish Lv.5', result: 'Win', time: '12 min', rating: '+15', color: 'green' },
+              { opponent: 'Stockfish Lv.4', result: 'Loss', time: '8 min', rating: '-12', color: 'red' },
+              { opponent: 'Stockfish Lv.6', result: 'Win', time: '15 min', rating: '+18', color: 'green' }
             ].map((game, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+              <div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer border border-white/5">
                 <div className="flex items-center space-x-3">
                   <div className={`w-3 h-3 rounded-full ${
-                    game.result === 'Win' ? 'bg-green-500' : 'bg-red-500'
+                    game.result === 'Win' ? 'bg-green-400 shadow-lg shadow-green-400/50' : 'bg-red-400 shadow-lg shadow-red-400/50'
                   }`}></div>
                   <div>
-                    <div className="font-medium text-gray-900">{game.opponent}</div>
-                    <div className="text-xs text-gray-500">{game.time}</div>
+                    <div className="font-medium text-white">{game.opponent}</div>
+                    <div className="text-xs text-slate-400">{game.time}</div>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className={`font-medium ${
-                    game.result === 'Win' ? 'text-green-600' : 'text-red-600'
+                    game.result === 'Win' ? 'text-green-400' : 'text-red-400'
                   }`}>
                     {game.result}
                   </div>
                   <div className={`text-xs ${
-                    game.rating.startsWith('+') ? 'text-green-600' : 'text-red-600'
+                    game.rating.startsWith('+') ? 'text-green-400' : 'text-red-400'
                   }`}>
                     {game.rating}
                   </div>
@@ -337,14 +344,14 @@ const ModernHomePage = () => {
       <style jsx>{`
         @keyframes float {
           0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
+          50% { transform: translateY(-8px); }
         }
         .animate-float {
-          animation: float 3s ease-in-out infinite;
+          animation: float ease-in-out infinite;
         }
       `}</style>
     </div>
   );
 };
 
-export default ModernHomePage;
+export default ProfessionalHomePage;

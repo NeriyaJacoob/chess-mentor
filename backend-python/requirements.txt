@@ -1,26 +1,23 @@
-# Requirements for ChessMentor Server with Stockfish
+# Requirements for ChessMentor with MongoDB and Enhanced Analysis
 
-# FastAPI & Server
+# Existing requirements
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-
-# WebSocket support
 websockets==12.0
-
-# Basic data handling
 python-multipart==0.0.6
-
-# Chess Libraries - REQUIRED FOR STOCKFISH
 python-chess==1.999
-# This includes chess engine support
-
-# Environment variables
 python-dotenv==1.0.0
 
-# להתקנה:
-# pip install -r requirements.txt
+# MongoDB support
+motor==3.3.2
+pymongo==4.6.0
 
-# חשוב: וודא ש-Stockfish מותקן במערכת!
-# Windows: הורד מ-https://stockfishchess.org/download/
-# Linux: sudo apt-get install stockfish  
-# macOS: brew install stockfish
+# Environment variables needed:
+# MONGODB_URL=mongodb://localhost:27017
+# STOCKFISH_PATH=/path/to/stockfish (optional)
+# OPENAI_API_KEY=your_key_here (for direct API calls if needed)
+
+# Installation notes:
+# 1. Install MongoDB locally or use MongoDB Atlas
+# 2. Make sure Stockfish is installed and accessible
+# 3. Update .env file with MongoDB connection string

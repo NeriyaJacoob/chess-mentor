@@ -1,41 +1,37 @@
-// src/components/Layout/ProfessionalSidebar.jsx
-// Sidebar navigation links and actions
-import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import React, { useState, useEffect } from 'react';
 import { 
   Home, 
   Play, 
   BarChart3, 
   Puzzle, 
-  GraduationCap, 
-  Bot, 
-  Settings,
+  Settings, 
+  Brain,
   Crown,
-  Trophy,
-  Clock,
-  ChevronLeft,
-  Zap,
   Target,
-  Star,
-  User
+  Clock,
+  Trophy,
+  Gamepad2,
+  ChevronLeft,
+  ChevronRight,
+  Zap,
+  Activity,
+  BookOpen,
+  User,
+  HelpCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
-const ProfessionalSidebar = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const { isAuthenticated } = useSelector(state => state.auth);
-  const { moveCount } = useSelector(state => state.game);
+const ProfessionalSidebar = ({ isCollapsed = false, onToggleCollapse, activeRoute = '/' }) => {
+  const [hoveredItem, setHoveredItem] = useState(null);
+  const [engineStatus, setEngineStatus] = useState('ready');
 
-  const menuItems = [
+  // Mock navigation items
+  const navigationItems = [
     { 
       id: 'home', 
       label: 'Dashboard', 
       icon: Home, 
       path: '/', 
-      color: 'blue',
+      description: 'Overview and quick actions',
       badge: null
     },
     { 
@@ -43,15 +39,15 @@ const ProfessionalSidebar = () => {
       label: 'Play', 
       icon: Play, 
       path: '/play', 
-      color: 'green',
-      badge: moveCount > 0 ? 'Active' : null
+      description: 'Play against AI engine',
+      badge: 'Live'
     },
     { 
       id: 'analysis', 
       label: 'Analysis', 
       icon: BarChart3, 
       path: '/analysis', 
-      color: 'purple',
+      description: 'Deep position analysis',
       badge: null
     },
     { 
@@ -59,307 +55,320 @@ const ProfessionalSidebar = () => {
       label: 'Puzzles', 
       icon: Puzzle, 
       path: '/puzzles', 
-      color: 'orange',
-      badge: '3 New'
-    },
-    { 
-      id: 'learn', 
-      label: 'Learn', 
-      icon: GraduationCap, 
-      path: '/learn', 
-      color: 'indigo',
-      badge: null
+      description: 'Tactical training',
+      badge: '3'
     },
     { 
       id: 'coach', 
       label: 'AI Coach', 
-      icon: Bot, 
+      icon: Brain, 
       path: '/coach', 
-      color: 'emerald',
-      badge: isAuthenticated ? 'Online' : 'Offline'
-    },
+      description: 'Personal chess mentor',
+      badge: null
+    }
   ];
 
-  const isActiveRoute = (path) => location.pathname === path;
+  const secondaryItems = [
+    { 
+      id: 'profile', 
+      label: 'Profile', 
+      icon: User, 
+      path: '/profile', 
+      description: 'Your chess profile'
+    },
+    { 
+      id: 'settings', 
+      label: 'Settings', 
+      icon: Settings, 
+      path: '/settings', 
+      description: 'App preferences'
+    },
+    { 
+      id: 'help', 
+      label: 'Help', 
+      icon: HelpCircle, 
+      path: '/help', 
+      description: 'Get support'
+    }
+  ];
+
+  // Mock user stats
+  const userStats = {
+    rating: 1456,
+    gamesPlayed: 342,
+    winRate: 67,
+    puzzlesSolved: 1247,
+    currentStreak: 7
+  };
+
+  useEffect(() => {
+    // Simulate engine status changes
+    const statuses = ['ready', 'thinking', 'analyzing'];
+    let currentIndex = 0;
+    
+    const interval = setInterval(() => {
+      currentIndex = (currentIndex + 1) % statuses.length;
+      setEngineStatus(statuses[currentIndex]);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const isActiveRoute = (path) => {
+    return activeRoute === path;
+  };
 
   const handleNavigation = (path) => {
-    navigate(path);
+    console.log('Navigating to:', path);
+    // Handle navigation logic here
   };
 
-  const sidebarVariants = {
-    expanded: { width: '16rem' },
-    collapsed: { width: '4rem' }
+  const getEngineStatusConfig = () => {
+    switch (engineStatus) {
+      case 'thinking':
+        return { color: 'text-yellow-400', bg: 'bg-yellow-400/20', label: 'Thinking', pulse: true };
+      case 'analyzing':
+        return { color: 'text-purple-400', bg: 'bg-purple-400/20', label: 'Analyzing', pulse: true };
+      default:
+        return { color: 'text-green-400', bg: 'bg-green-400/20', label: 'Ready', pulse: false };
+    }
   };
 
-  const contentVariants = {
-    expanded: { opacity: 1, x: 0 },
-    collapsed: { opacity: 0, x: -20 }
-  };
+  const engineConfig = getEngineStatusConfig();
 
   return (
-    <motion.div
-      className="bg-slate-900 text-white flex flex-col relative border-r border-slate-700"
-      variants={sidebarVariants}
-      animate={isCollapsed ? 'collapsed' : 'expanded'}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
+    <div 
+      className={`relative h-full bg-slate-900/95 backdrop-blur-xl border-r border-white/10 flex flex-col transition-all duration-300 ${
+        isCollapsed ? 'w-16' : 'w-64'
+      }`}
     >
+      
       {/* Header */}
-      <div className="p-4 border-b border-slate-700">
-        <div className="flex items-center space-x-3">
-          {/* Logo */}
-          <div className="p-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg shadow-lg">
-            <Crown className="h-6 w-6 text-white" />
-          </div>
-          
-          {/* Brand Text */}
-          <AnimatePresence>
-            {!isCollapsed && (
-              <motion.div
-                variants={contentVariants}
-                initial="collapsed"
-                animate="expanded"
-                exit="collapsed"
-                transition={{ duration: 0.2 }}
-              >
-                <h1 className="font-bold text-lg bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                  ChessMentor
-                </h1>
+      <div className="p-4 border-b border-white/10">
+        <div className="flex items-center justify-between">
+          {!isCollapsed && (
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                <Crown className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-white">ChessMentor</h1>
                 <p className="text-xs text-slate-400">Professional Training</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+            </div>
+          )}
+          
+          <button
+            onClick={onToggleCollapse}
+            className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
+          >
+            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
         </div>
       </div>
 
-      {/* User Profile */}
-      <AnimatePresence>
-        {!isCollapsed && (
-          <motion.div
-            className="p-4 border-b border-slate-700"
-            variants={contentVariants}
-            initial="collapsed"
-            animate="expanded"
-            exit="collapsed"
-            transition={{ duration: 0.2, delay: 0.1 }}
-          >
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
-                <User className="h-5 w-5 text-white" />
+      {/* Engine Status */}
+      <div className="p-4 border-b border-white/10">
+        {!isCollapsed ? (
+          <div className={`${engineConfig.bg} rounded-lg p-3 border border-white/10`}>
+            <div className="flex items-center space-x-3">
+              <div className="relative">
+                <Activity className={`h-5 w-5 ${engineConfig.color}`} />
+                {engineConfig.pulse && (
+                  <div className={`absolute inset-0 ${engineConfig.color.replace('text-', 'bg-')} rounded-full animate-ping opacity-20`}></div>
+                )}
               </div>
-              <div>
-                <p className="font-medium text-white">Player</p>
-                <p className="text-xs text-slate-400">Intermediate Level</p>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-white font-medium text-sm">Stockfish Engine</span>
+                  <div className={`w-2 h-2 rounded-full ${engineConfig.color.replace('text-', 'bg-')} ${engineConfig.pulse ? 'animate-pulse' : ''}`}></div>
+                </div>
+                <p className={`text-xs ${engineConfig.color}`}>{engineConfig.label}</p>
               </div>
             </div>
-            
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-lg p-2 border border-slate-700/50">
-                <div className="flex items-center space-x-1 mb-1">
-                  <Trophy className="h-3 w-3 text-yellow-400" />
-                  <span className="text-slate-300">ELO</span>
-                </div>
-                <p className="font-bold text-white">1,247</p>
-              </div>
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-lg p-2 border border-slate-700/50">
-                <div className="flex items-center space-x-1 mb-1">
-                  <Zap className="h-3 w-3 text-green-400" />
-                  <span className="text-slate-300">Streak</span>
-                </div>
-                <p className="font-bold text-white">5</p>
-              </div>
-            </div>
-          </motion.div>
+          </div>
+        ) : (
+          <div className="flex justify-center">
+            <div className={`w-3 h-3 rounded-full ${engineConfig.color.replace('text-', 'bg-')} ${engineConfig.pulse ? 'animate-pulse' : ''}`}></div>
+          </div>
         )}
-      </AnimatePresence>
+      </div>
 
-      {/* Navigation Menu */}
-      <nav className="flex-1 p-3">
+      {/* User Stats Summary */}
+      {!isCollapsed && (
+        <div className="p-4 border-b border-white/10">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white/5 rounded-lg p-2 text-center">
+              <div className="text-lg font-bold text-yellow-400">{userStats.rating}</div>
+              <div className="text-xs text-slate-400">Rating</div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-2 text-center">
+              <div className="text-lg font-bold text-green-400">{userStats.winRate}%</div>
+              <div className="text-xs text-slate-400">Win Rate</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Navigation */}
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
         <div className="space-y-1">
-          {menuItems.map((item, index) => {
+          {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = isActiveRoute(item.path);
+            const isHovered = hoveredItem === item.id;
             
             return (
-              <motion.button
-                key={item.id}
-                onClick={() => handleNavigation(item.path)}
-                className={`w-full flex items-center space-x-3 px-3 py-3 rounded-xl transition-all duration-200 group relative ${
-                  isActive 
-                    ? `bg-gradient-to-r from-${item.color}-600 to-${item.color}-700 text-white shadow-lg shadow-${item.color}-500/25` 
-                    : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
-                }`}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                {/* Icon */}
-                <div className={`relative ${isCollapsed ? 'mx-auto' : ''}`}>
-                  <Icon className={`h-5 w-5 ${
-                    isActive ? 'text-white' : `text-${item.color}-400 group-hover:text-${item.color}-300`
-                  }`} />
+              <div key={item.id} className="relative">
+                <button
+                  onClick={() => handleNavigation(item.path)}
+                  onMouseEnter={() => setHoveredItem(item.id)}
+                  onMouseLeave={() => setHoveredItem(null)}
+                  className={`relative w-full flex items-center space-x-3 px-3 py-3 rounded-xl transition-all duration-200 group ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-blue-300 border border-blue-500/30 shadow-lg'
+                      : 'text-slate-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <Icon className={`h-5 w-5 ${isActive ? 'text-blue-400' : ''} group-hover:scale-110 transition-transform duration-200`} />
                   
-                  {/* Active indicator for collapsed state */}
-                  {isActive && isCollapsed && (
-                    <motion.div
-                      className="absolute -right-8 top-1/2 transform -translate-y-1/2 w-1 h-6 bg-white rounded-full"
-                      layoutId="activeIndicator"
-                    />
-                  )}
-                </div>
-
-                {/* Label and Badge */}
-                <AnimatePresence>
                   {!isCollapsed && (
-                    <motion.div
-                      className="flex items-center justify-between flex-1 min-w-0"
-                      variants={contentVariants}
-                      initial="collapsed"
-                      animate="expanded"
-                      exit="collapsed"
-                      transition={{ duration: 0.2 }}
-                    >
-                      <span className="font-medium truncate">{item.label}</span>
+                    <>
+                      <span className="font-medium">{item.label}</span>
+                      <div className="flex-1"></div>
                       
-                      {/* Badge */}
                       {item.badge && (
-                        <motion.span
-                          className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                            item.badge === 'Online' 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                              : item.badge === 'Offline'
-                              ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                              : item.badge === 'Active'
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                              : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
-                          }`}
-                          initial={{ scale: 0, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ delay: 0.2 }}
-                        >
+                        <div className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          item.badge === 'Live' 
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                            : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                        }`}>
                           {item.badge}
-                        </motion.span>
+                        </div>
                       )}
-                    </motion.div>
+                    </>
                   )}
-                </AnimatePresence>
+
+                  {/* Active indicator */}
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-blue-400 to-purple-400 rounded-r-full"></div>
+                  )}
+                </button>
 
                 {/* Tooltip for collapsed state */}
-                {isCollapsed && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
-                    {item.label}
-                    {item.badge && (
-                      <span className="ml-2 px-1.5 py-0.5 bg-slate-700 rounded text-xs">
-                        {item.badge}
-                      </span>
-                    )}
+                {isCollapsed && isHovered && (
+                  <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 bg-slate-800/95 backdrop-blur-xl border border-white/20 rounded-lg p-3 z-50 shadow-xl">
+                    <div className="whitespace-nowrap">
+                      <div className="font-medium text-white">{item.label}</div>
+                      <div className="text-xs text-slate-400 mt-1">{item.description}</div>
+                    </div>
+                    {/* Arrow */}
+                    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-slate-800 border-l border-t border-white/20 rotate-45"></div>
                   </div>
                 )}
-              </motion.button>
+              </div>
             );
           })}
         </div>
 
-        {/* AI Coach Status (when collapsed) */}
-        {isCollapsed && (
-          <motion.div
-            className="mt-6 px-3"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            <div className={`w-3 h-3 rounded-full mx-auto ${
-              isAuthenticated ? 'bg-green-400' : 'bg-gray-400'
-            } animate-pulse`} />
-          </motion.div>
-        )}
+        {/* Separator */}
+        <div className="my-4 border-t border-white/10"></div>
 
-        {/* AI Coach Status (when expanded) */}
-        <AnimatePresence>
-          {!isCollapsed && (
-            <motion.div
-              className="mt-6 mx-3 p-3 bg-gradient-to-r from-slate-800/50 to-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-600/30"
-              variants={contentVariants}
-              initial="collapsed"
-              animate="expanded"
-              exit="collapsed"
-              transition={{ duration: 0.2, delay: 0.3 }}
-            >
-              <div className="flex items-center space-x-2 mb-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  isAuthenticated ? 'bg-green-400 animate-pulse' : 'bg-gray-400'
-                }`} />
-                <span className="text-sm font-medium">GPT Coach</span>
+        {/* Secondary Navigation */}
+        <div className="space-y-1">
+          {secondaryItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = isActiveRoute(item.path);
+            const isHovered = hoveredItem === item.id;
+            
+            return (
+              <div key={item.id} className="relative">
+                <button
+                  onClick={() => handleNavigation(item.path)}
+                  onMouseEnter={() => setHoveredItem(item.id)}
+                  onMouseLeave={() => setHoveredItem(null)}
+                  className={`relative w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200 group ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                  }`}
+                >
+                  <Icon className="h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
+                  
+                  {!isCollapsed && (
+                    <span className="text-sm font-medium">{item.label}</span>
+                  )}
+                </button>
+
+                {/* Tooltip for collapsed state */}
+                {isCollapsed && isHovered && (
+                  <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 bg-slate-800/95 backdrop-blur-xl border border-white/20 rounded-lg p-3 z-50 shadow-xl">
+                    <div className="whitespace-nowrap">
+                      <div className="font-medium text-white">{item.label}</div>
+                      <div className="text-xs text-slate-400 mt-1">{item.description}</div>
+                    </div>
+                    {/* Arrow */}
+                    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-slate-800 border-l border-t border-white/20 rotate-45"></div>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-slate-400">
-                {isAuthenticated ? 'Ready to help you improve' : 'Connect to enable coaching'}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            );
+          })}
+        </div>
       </nav>
 
-      {/* Bottom Section */}
-      <div className="p-3 border-t border-slate-700">
-        <motion.button
-          onClick={() => navigate('/settings')}
-          className={`w-full flex items-center space-x-3 px-3 py-3 rounded-xl transition-all duration-200 ${
-            isActiveRoute('/settings')
-              ? 'bg-slate-700 text-white'
-              : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
-          }`}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <Settings className="h-5 w-5" />
-          <AnimatePresence>
-            {!isCollapsed && (
-              <motion.span
-                className="font-medium"
-                variants={contentVariants}
-                initial="collapsed"
-                animate="expanded"
-                exit="collapsed"
-                transition={{ duration: 0.2 }}
-              >
-                Settings
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </motion.button>
-        
-        <AnimatePresence>
-          {!isCollapsed && (
-            <motion.div
-              className="mt-3 text-center"
-              variants={contentVariants}
-              initial="collapsed"
-              animate="expanded"
-              exit="collapsed"
-              transition={{ duration: 0.2 }}
-            >
-              <div className="text-xs text-slate-500">
-                ChessMentor Pro v1.0
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      {/* Quick Actions */}
+      {!isCollapsed && (
+        <div className="p-4 border-t border-white/10">
+          <div className="space-y-2">
+            <button className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg font-semibold">
+              <Play className="h-4 w-4" />
+              <span>Quick Play</span>
+            </button>
+            
+            <button className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-white/10 text-slate-300 rounded-lg hover:bg-white/20 transition-all duration-300 border border-white/10">
+              <Target className="h-4 w-4" />
+              <span>Daily Puzzle</span>
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* Collapse Toggle */}
-      <motion.button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-20 bg-slate-800 border border-slate-600 rounded-full p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors shadow-lg z-10"
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-      >
-        <ChevronLeft className={`h-4 w-4 transition-transform duration-300 ${
-          isCollapsed ? 'rotate-180' : ''
-        }`} />
-      </motion.button>
-    </motion.div>
+      {/* Collapsed Quick Actions */}
+      {isCollapsed && (
+        <div className="p-2 border-t border-white/10 space-y-2">
+          <button 
+            className="w-full p-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg"
+            title="Quick Play"
+          >
+            <Play className="h-4 w-4 mx-auto" />
+          </button>
+          <button 
+            className="w-full p-2 bg-white/10 text-slate-300 rounded-lg hover:bg-white/20 transition-all duration-300 border border-white/10"
+            title="Daily Puzzle"
+          >
+            <Target className="h-4 w-4 mx-auto" />
+          </button>
+        </div>
+      )}
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.5);
+        }
+      `}</style>
+    </div>
   );
 };
 

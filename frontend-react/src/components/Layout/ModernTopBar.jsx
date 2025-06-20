@@ -1,232 +1,347 @@
-// frontend-react/src/components/Layout/ModernTopBar.jsx
-// Responsive navigation bar for the layout
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
   Bell, 
-  Sun, 
-  Moon, 
   Settings, 
   User, 
-  Trophy,
-  Gamepad2,
-  Brain,
+  Moon, 
+  Sun, 
   ChevronDown,
+  Crown,
+  Zap,
+  Trophy,
   Activity,
-  Zap
+  LogOut,
+  Menu,
+  X,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
-const ModernTopBar = () => {
-  const navigate = useNavigate();
-  const [searchFocus, setSearchFocus] = useState(false);
+const ModernTopBar = ({ onMenuToggle, isMenuOpen = false, theme = 'dark', onThemeToggle }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('chessmentor-theme') || 'light';
-  });
-  
-  const { isAuthenticated } = useSelector(state => state.auth);
-  const { moveCount, isGameOver } = useSelector(state => state.game);
+  const [notifications, setNotifications] = useState([
+    { id: 1, type: 'achievement', title: 'Achievement Unlocked!', message: 'Tactical Expert - Solved 100 puzzles', time: '2 min ago', unread: true },
+    { id: 2, type: 'game', title: 'Game Invitation', message: 'Player ChessLover invited you to play', time: '5 min ago', unread: true },
+    { id: 3, type: 'puzzle', title: 'Daily Puzzle', message: 'New puzzle available for today', time: '1 hour ago', unread: false },
+    { id: 4, type: 'system', title: 'Update Available', message: 'Version 2.1.0 is ready to install', time: '2 hours ago', unread: false }
+  ]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Mock user data
+  const user = {
+    name: 'Chess Player',
+    avatar: '👤',
+    rating: 1456,
+    title: 'Expert',
+    gamesPlayed: 342,
+    winRate: 67
+  };
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    document.body.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('chessmentor-theme', theme);
-  }, [theme]);
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
+  const unreadCount = notifications.filter(n => n.unread).length;
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      console.log('Searching for:', searchQuery);
+      // Handle search logic here
+    }
   };
 
-  const getGameStatus = () => {
-    if (isGameOver) return { status: 'completed', color: 'text-gray-500 bg-gray-100', label: 'Game Over' };
-    if (moveCount > 0) return { status: 'active', color: 'text-green-600 bg-green-100', label: `Move ${moveCount}` };
-    return { status: 'ready', color: 'text-blue-600 bg-blue-100', label: 'Ready to Play' };
+  const handleNotificationClick = (notificationId) => {
+    setNotifications(prev => 
+      prev.map(n => 
+        n.id === notificationId ? { ...n, unread: false } : n
+      )
+    );
   };
 
-  const gameStatus = getGameStatus();
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  const getNotificationIcon = (type) => {
+    switch (type) {
+      case 'achievement': return '🏆';
+      case 'game': return '♔';
+      case 'puzzle': return '🧩';
+      case 'system': return '⚙️';
+      default: return '📢';
+    }
+  };
 
   return (
-    <header className={`sticky top-0 z-40 border-b px-6 py-3 transition-all duration-200 ${
-      theme === 'dark' 
-        ? 'bg-gray-900/95 backdrop-blur-sm border-gray-700' 
-        : 'bg-white/95 backdrop-blur-sm border-gray-200'
-    }`}>
+    <header className="sticky top-0 z-50 bg-white/5 backdrop-blur-xl border-b border-white/10 px-6 py-4">
       <div className="flex items-center justify-between">
-        {/* Left Section - Search */}
-        <div className="flex-1 max-w-md">
-          <div className={`relative transition-all duration-300 ${searchFocus ? 'scale-105' : 'scale-100'}`}>
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-              <Search className={`h-4 w-4 transition-colors ${
-                searchFocus ? 'text-blue-500' : theme === 'dark' ? 'text-gray-400' : 'text-gray-400'
-              }`} />
+        
+        {/* Left Section */}
+        <div className="flex items-center space-x-4">
+          {/* Menu Toggle */}
+          <button
+            onClick={onMenuToggle}
+            className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200 lg:hidden"
+          >
+            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+
+          {/* Search Bar */}
+          <div className="relative">
+            <div onSubmit={handleSearchSubmit} className="flex">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search games, players, openings..."
+                  className="pl-10 pr-4 py-2 w-64 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-transparent text-white placeholder-slate-400 text-sm transition-all duration-200"
+                />
+              </div>
             </div>
-            <input
-              type="text"
-              placeholder="Search games, positions, players..."
-              className={`w-full pl-10 pr-4 py-2.5 border rounded-xl transition-all duration-200 ${
-                theme === 'dark'
-                  ? 'bg-gray-800 border-gray-600 text-gray-100 placeholder-gray-400'
-                  : 'bg-gray-50/50 border-gray-300 text-gray-900 placeholder-gray-500'
-              } ${
-                searchFocus 
-                  ? 'border-blue-300 shadow-lg ring-4 ring-blue-100/50 scale-105' 
-                  : 'hover:border-gray-400 hover:shadow-md'
-              } focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500`}
-              onFocus={() => setSearchFocus(true)}
-              onBlur={() => setSearchFocus(false)}
-            />
           </div>
         </div>
 
-        {/* Center Section - Game Status & Quick Stats */}
-        <div className="hidden lg:flex items-center space-x-4 mx-8">
-          {/* Game Status */}
-          <div className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 ${
-            gameStatus.color
-          } ${theme === 'dark' ? 'border-gray-600' : 'border-gray-200'}`}>
-            <div className={`w-2.5 h-2.5 rounded-full ${
-              gameStatus.status === 'active' ? 'bg-green-500 animate-pulse shadow-lg shadow-green-500/50' :
-              gameStatus.status === 'completed' ? 'bg-gray-400' : 'bg-blue-500 animate-pulse shadow-lg shadow-blue-500/50'
-            }`} />
-            <Gamepad2 className="h-4 w-4" />
-            <span className="text-sm font-semibold">
-              {gameStatus.label}
-            </span>
+        {/* Right Section */}
+        <div className="flex items-center space-x-4">
+          
+          {/* System Stats */}
+          <div className="hidden md:flex items-center space-x-4 text-sm text-slate-400">
+            <div className="flex items-center space-x-2">
+              <Activity className="h-4 w-4 text-green-400" />
+              <span>Engine Ready</span>
+            </div>
+            <div className="text-slate-500">|</div>
+            <div className="font-mono">
+              {currentTime.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+              })}
+            </div>
           </div>
 
-          {/* ELO Rating */}
-          <div className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 ${
-            theme === 'dark'
-              ? 'bg-gradient-to-r from-yellow-900/30 to-orange-900/30 border-yellow-700 text-yellow-300'
-              : 'bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200 text-yellow-700'
-          }`}>
-            <Trophy className="h-4 w-4 text-yellow-600" />
-            <span className="text-sm font-semibold">1,247</span>
-            <span className="text-xs opacity-75">ELO</span>
-          </div>
+          {/* Fullscreen Toggle */}
+          <button
+            onClick={toggleFullscreen}
+            className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200 hidden lg:block"
+            title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+          >
+            {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+          </button>
 
-          {/* AI Coach Status */}
-          <div className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 ${
-            isAuthenticated
-              ? theme === 'dark'
-                ? 'bg-gradient-to-r from-green-900/30 to-emerald-900/30 border-green-700'
-                : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
-              : theme === 'dark'
-                ? 'bg-gray-800 border-gray-600'
-                : 'bg-gray-100 border-gray-200'
-          }`}>
-            <Brain className={`h-4 w-4 ${
-              isAuthenticated 
-                ? 'text-green-600 animate-pulse' 
-                : theme === 'dark' ? 'text-gray-400' : 'text-gray-400'
-            }`} />
-            <span className={`text-sm font-semibold ${
-              isAuthenticated 
-                ? theme === 'dark' ? 'text-green-400' : 'text-green-700'
-                : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-            }`}>
-              {isAuthenticated ? 'Online' : 'Offline'}
-            </span>
-          </div>
-        </div>
-
-        {/* Right Section - Actions */}
-        <div className="flex items-center space-x-2">
-          {/* Performance Indicator (Mobile) */}
-          <div className="lg:hidden">
-            <button className={`p-2.5 rounded-xl transition-all duration-200 hover:scale-110 ${
-              theme === 'dark'
-                ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-800'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-            }`}>
-              <Activity className="h-5 w-5" />
-            </button>
-          </div>
+          {/* Theme Toggle */}
+          <button
+            onClick={onThemeToggle}
+            className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          >
+            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
 
           {/* Notifications */}
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className={`relative p-2.5 rounded-xl transition-all duration-200 hover:scale-110 ${
-                theme === 'dark'
-                  ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-800'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-              }`}
+              className="relative p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
             >
               <Bell className="h-5 w-5" />
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold shadow-lg animate-pulse">
-                2
-              </div>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center font-bold animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
             </button>
 
-            {/* Notifications Dropdown - נוסיף אחר כך */}
+            {/* Notifications Dropdown */}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl overflow-hidden z-50">
+                <div className="p-4 border-b border-white/10">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-white">Notifications</h3>
+                    <button
+                      onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))}
+                      className="text-blue-400 hover:text-blue-300 text-sm transition-colors"
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                  {notifications.length > 0 ? (
+                    notifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        onClick={() => handleNotificationClick(notification.id)}
+                        className={`w-full text-left p-4 border-b border-white/5 hover:bg-white/5 transition-all duration-200 ${
+                          notification.unread ? 'bg-blue-500/10' : ''
+                        }`}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <span className="text-xl">{getNotificationIcon(notification.type)}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2">
+                              <h4 className="font-medium text-white text-sm truncate">{notification.title}</h4>
+                              {notification.unread && (
+                                <div className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0"></div>
+                              )}
+                            </div>
+                            <p className="text-slate-400 text-xs mt-1 line-clamp-2">{notification.message}</p>
+                            <p className="text-slate-500 text-xs mt-1">{notification.time}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center">
+                      <Bell className="h-8 w-8 text-slate-500 mx-auto mb-2" />
+                      <p className="text-slate-400 text-sm">No notifications</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className={`p-2.5 rounded-xl transition-all duration-200 hover:scale-110 ${
-              theme === 'dark'
-                ? 'text-yellow-400 hover:text-yellow-300 hover:bg-gray-800'
-                : 'text-gray-600 hover:text-blue-600 hover:bg-blue-100'
-            }`}
-          >
-            <div className="relative">
-              {theme === 'light' ? (
-                <Moon className="h-5 w-5 transition-transform duration-300 hover:rotate-12" />
-              ) : (
-                <Sun className="h-5 w-5 transition-transform duration-300 hover:rotate-12" />
-              )}
-            </div>
-          </button>
-
-          {/* Settings */}
-          <button
-            onClick={() => navigate('/settings')}
-            className={`p-2.5 rounded-xl transition-all duration-200 hover:scale-110 hover:rotate-12 ${
-              theme === 'dark'
-                ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-800'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <Settings className="h-5 w-5" />
-          </button>
-
-          {/* Profile */}
+          {/* User Menu */}
           <div className="relative">
             <button
-              onClick={() => setShowProfile(!showProfile)}
-              className={`flex items-center space-x-2 p-2 rounded-xl transition-all duration-200 hover:scale-105 ${
-                theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
-              }`}
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center space-x-3 px-3 py-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
             >
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-shadow duration-200">
-                <User className="h-4 w-4 text-white" />
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                {user.name.charAt(0)}
               </div>
-              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${
-                showProfile ? 'rotate-180' : ''
-              } ${theme === 'dark' ? 'text-gray-400' : 'text-gray-400'}`} />
+              <div className="hidden md:block text-left">
+                <div className="text-sm font-medium text-white">{user.name}</div>
+                <div className="text-xs text-slate-400 flex items-center space-x-1">
+                  <Crown className="h-3 w-3 text-yellow-400" />
+                  <span>{user.rating}</span>
+                </div>
+              </div>
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Profile Dropdown - נוסיף אחר כך */}
+            {/* User Dropdown */}
+            {showUserMenu && (
+              <div className="absolute right-0 mt-2 w-72 bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl overflow-hidden z-50">
+                
+                {/* User Info Header */}
+                <div className="p-4 border-b border-white/10">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                      {user.name.charAt(0)}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-white">{user.name}</h3>
+                      <div className="flex items-center space-x-2 text-sm text-slate-400">
+                        <Crown className="h-4 w-4 text-yellow-400" />
+                        <span>{user.title}</span>
+                        <span>•</span>
+                        <span className="font-mono">{user.rating}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Quick Stats */}
+                  <div className="grid grid-cols-2 gap-3 mt-4">
+                    <div className="bg-white/5 rounded-lg p-2 text-center">
+                      <div className="text-lg font-bold text-blue-400">{user.gamesPlayed}</div>
+                      <div className="text-xs text-slate-400">Games</div>
+                    </div>
+                    <div className="bg-white/5 rounded-lg p-2 text-center">
+                      <div className="text-lg font-bold text-green-400">{user.winRate}%</div>
+                      <div className="text-xs text-slate-400">Win Rate</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Menu Items */}
+                <div className="p-2">
+                  {[
+                    { icon: User, label: 'Profile', action: () => console.log('Profile') },
+                    { icon: Trophy, label: 'Achievements', action: () => console.log('Achievements') },
+                    { icon: Zap, label: 'Statistics', action: () => console.log('Statistics') },
+                    { icon: Settings, label: 'Settings', action: () => console.log('Settings') }
+                  ].map((item, index) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={index}
+                        onClick={item.action}
+                        className="w-full flex items-center space-x-3 px-3 py-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span className="text-sm">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                  
+                  <div className="my-2 border-t border-white/10"></div>
+                  
+                  <button
+                    onClick={() => console.log('Logout')}
+                    className="w-full flex items-center space-x-3 px-3 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all duration-200"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span className="text-sm">Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Click outside handler */}
-      {(showNotifications || showProfile) && (
-        <div
-          className="fixed inset-0 z-30"
+      {/* Click outside to close dropdowns */}
+      {(showUserMenu || showNotifications) && (
+        <div 
+          className="fixed inset-0 z-40" 
           onClick={() => {
+            setShowUserMenu(false);
             setShowNotifications(false);
-            setShowProfile(false);
           }}
-        />
+        ></div>
       )}
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.5);
+        }
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+      `}</style>
     </header>
   );
 };

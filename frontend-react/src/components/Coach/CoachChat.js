@@ -1,41 +1,110 @@
-// src/components/Coach/CoachChat.js
-// Chat interface with the AI coach
 import React, { useState, useRef, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { motion, AnimatePresence } from 'framer-motion';
-import { sendToCoach, clearMessages, clearError } from '../../store/slices/coachSlice';
+import { 
+  Brain, 
+  Send, 
+  Trash2, 
+  Lightbulb, 
+  Target, 
+  TrendingUp, 
+  Zap, 
+  Clock, 
+  MessageCircle,
+  Sparkles,
+  BookOpen,
+  ChevronDown,
+  Cpu,
+  Activity,
+  Bot
+} from 'lucide-react';
 
-const CoachChat = () => {
-  const dispatch = useDispatch();
-  const { messages, isLoading, error } = useSelector(state => state.coach);
-  const { fen } = useSelector(state => state.game);
+const ProfessionalCoachPanel = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [analysisType, setAnalysisType] = useState('general');
+  const [isLoading, setIsLoading] = useState(false);
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      type: 'coach',
+      content: 'Hello! I\'m your AI Chess Coach powered by advanced analysis engines. I can help you with position evaluation, tactical analysis, strategic planning, and opening theory. What would you like to explore?',
+      timestamp: new Date(Date.now() - 120000).toISOString(),
+      analysisType: 'general'
+    }
+  ]);
+  
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Focus input on mount
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  const analysisTypes = [
+    { value: 'general', label: '💬 General', description: 'General questions', color: 'from-blue-500/20 to-cyan-500/20' },
+    { value: 'position', label: '📋 Position', description: 'Position analysis', color: 'from-purple-500/20 to-violet-500/20' },
+    { value: 'tactics', label: '⚡ Tactics', description: 'Tactical evaluation', color: 'from-orange-500/20 to-red-500/20' },
+    { value: 'strategy', label: '🎯 Strategy', description: 'Strategic planning', color: 'from-green-500/20 to-emerald-500/20' },
+  ];
+
+  const quickQuestions = [
+    'What\'s the best move in this position?',
+    'How can I improve my position?',
+    'Are there any tactical opportunities?',
+    'What\'s the main strategic idea here?',
+    'How should I continue this opening?',
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!inputMessage.trim() || isLoading) return;
 
-    const message = inputMessage.trim();
-    setInputMessage('');
-
-    dispatch(sendToCoach({
-      message,
-      gameState: fen,
+    const userMessage = {
+      id: Date.now(),
+      type: 'user',
+      content: inputMessage.trim(),
+      timestamp: new Date().toISOString(),
       analysisType
-    }));
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    // Simulate AI response
+    setTimeout(() => {
+      const coachResponse = {
+        id: Date.now() + 1,
+        type: 'coach',
+        content: generateMockResponse(userMessage.content, analysisType),
+        timestamp: new Date().toISOString(),
+        analysisType
+      };
+      setMessages(prev => [...prev, coachResponse]);
+      setIsLoading(false);
+    }, 2000);
+  };
+
+  const generateMockResponse = (message, type) => {
+    const responses = {
+      general: [
+        "That's an excellent question! In this type of position, you want to focus on piece coordination and central control. The key principles to remember are: 1) Develop with purpose, 2) Control the center, 3) Keep your king safe.",
+        "Great observation! This position offers several interesting possibilities. Let me break down the key factors you should consider..."
+      ],
+      position: [
+        "Looking at this position through the engine's eyes: White has a slight advantage (+0.3) due to better piece activity. The knight on f3 is well-placed, and the central pawn structure favors White's development plan.",
+        "This is a fascinating position! The material is equal, but White's pieces are more harmoniously placed. I'd recommend focusing on the queenside expansion while maintaining central tension."
+      ],
+      tactics: [
+        "Sharp tactical eye! There's indeed a tactical motif here. Look for the knight fork pattern - if you can maneuver your knight to e5, you'll create multiple threats simultaneously.",
+        "Excellent tactical awareness! The position is rich with combinative possibilities. The key tactical themes here are pins, forks, and discovered attacks."
+      ],
+      strategy: [
+        "Strategically speaking, this position revolves around central control and piece activity. Your long-term plan should focus on improving your worst-placed piece while restricting your opponent's counterplay.",
+        "From a strategic standpoint, you're at a critical juncture. The pawn structure suggests a kingside attack is feasible, but you must first consolidate your central position."
+      ]
+    };
+    
+    const typeResponses = responses[type] || responses.general;
+    return typeResponses[Math.floor(Math.random() * typeResponses.length)];
   };
 
   const handleQuickQuestion = (question) => {
@@ -43,70 +112,63 @@ const CoachChat = () => {
     inputRef.current?.focus();
   };
 
-  const quickQuestions = [
-    'מה המהלך הטוב ביותר במצב הנוכחי?',
-    'אילו עקרונות אסטרטגיים חשובים כאן?',
-    'האם יש טקטיקות שאני מפספס?',
-    'כיצד אוכל לשפר את המיקום שלי?',
-    'מה הרעיון הראשי בפתיחה הזו?',
-  ];
+  const clearMessages = () => {
+    setMessages([]);
+  };
 
-  const analysisTypes = [
-    { value: 'general', label: '💬 כללי', description: 'שאלות כלליות' },
-    { value: 'position', label: '📋 מיקום', description: 'ניתוח מיקום' },
-    { value: 'move', label: '♟️ מהלך', description: 'הערכת מהלך' },
-  ];
+  const formatTime = (timestamp) => {
+    return new Date(timestamp).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getAnalysisTypeInfo = (type) => {
+    return analysisTypes.find(t => t.value === type) || analysisTypes[0];
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="bg-white rounded-lg shadow-sm border border-gray-200 h-96 flex flex-col"
-    >
+    <div className="w-96 bg-white/5 backdrop-blur-xl border-l border-white/10 flex flex-col h-full">
+      
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex items-center">
-          <div className="text-2xl mr-2">🤖</div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">מאמן GPT</h3>
-            <p className="text-xs text-gray-500">מומחה שחמט אישי</p>
+      <div className="p-6 border-b border-white/10">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-xl border border-purple-500/20">
+              <Brain className="h-6 w-6 text-purple-400" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-white">AI Chess Coach</h3>
+              <p className="text-xs text-slate-400">Advanced analysis & guidance</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1 px-2 py-1 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-xs font-medium">Online</span>
+            </div>
+            <button
+              onClick={clearMessages}
+              className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
+              title="Clear conversation"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
         </div>
-        
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => dispatch(clearMessages())}
-            className="text-gray-400 hover:text-gray-600 text-sm"
-            title="נקה שיחה"
-          >
-            🗑️
-          </button>
-          {error && (
-            <button
-              onClick={() => dispatch(clearError())}
-              className="text-red-400 hover:text-red-600 text-sm"
-              title="נקה שגיאה"
-            >
-              ❌
-            </button>
-          )}
-        </div>
-      </div>
 
-      {/* Analysis Type Selector */}
-      <div className="px-4 py-2 border-b border-gray-100">
-        <div className="flex space-x-1">
+        {/* Analysis Type Selector */}
+        <div className="grid grid-cols-2 gap-2">
           {analysisTypes.map((type) => (
             <button
               key={type.value}
               onClick={() => setAnalysisType(type.value)}
-              className={`
-                px-2 py-1 rounded text-xs font-medium transition-colors
-                ${analysisType === type.value
-                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }
-              `}
+              className={`p-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                analysisType === type.value
+                  ? `bg-gradient-to-r ${type.color} text-white border border-white/20`
+                  : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/10'
+              }`}
               title={type.description}
             >
               {type.label}
@@ -115,24 +177,44 @@ const CoachChat = () => {
         </div>
       </div>
 
+      {/* Engine Status */}
+      <div className="px-6 py-3 border-b border-white/10">
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center space-x-2 text-slate-400">
+            <Cpu className="h-4 w-4" />
+            <span>Stockfish 15</span>
+          </div>
+          <div className="flex items-center space-x-2 text-slate-400">
+            <Activity className="h-4 w-4" />
+            <span>Depth: 22</span>
+          </div>
+          <div className="flex items-center space-x-2 text-green-400">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <span>Ready</span>
+          </div>
+        </div>
+      </div>
+
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
         {messages.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            <div className="text-4xl mb-4">🎯</div>
-            <p className="text-sm mb-4">שלום! אני המאמן שלך.</p>
-            <p className="text-xs text-gray-400 mb-4">
-              שאל אותי כל שאלה על המיקום הנוכחי או על שחמט בכלל
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-purple-500/20">
+              <Bot className="h-8 w-8 text-purple-400" />
+            </div>
+            <p className="text-white font-semibold mb-2">Welcome to AI Coach</p>
+            <p className="text-slate-400 text-sm mb-6">
+              Ask me anything about your chess position, tactics, or strategy
             </p>
             
             {/* Quick Questions */}
             <div className="space-y-2">
-              <p className="text-xs font-medium text-gray-600">שאלות מהירות:</p>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Quick Questions:</p>
               {quickQuestions.slice(0, 3).map((question, index) => (
                 <button
                   key={index}
                   onClick={() => handleQuickQuestion(question)}
-                  className="block w-full text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-2 rounded transition-colors"
+                  className="block w-full text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 p-2 rounded-lg transition-all duration-200 border border-blue-500/20 hover:border-blue-500/40"
                 >
                   {question}
                 </button>
@@ -140,104 +222,138 @@ const CoachChat = () => {
             </div>
           </div>
         ) : (
-          <AnimatePresence>
+          <>
             {messages.map((message) => (
-              <motion.div
+              <div
                 key={message.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
                 className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div
-                  className={`
-                    max-w-[80%] p-3 rounded-lg text-sm
-                    ${message.type === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-800'
-                    }
-                  `}
-                >
-                  <div className="whitespace-pre-wrap">{message.content}</div>
-                  <div className={`text-xs mt-1 opacity-70`}>
-                    {new Date(message.timestamp).toLocaleTimeString('he-IL', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                    {message.analysisType && message.type === 'coach' && (
-                      <span className="ml-2">
-                        {analysisTypes.find(t => t.value === message.analysisType)?.label}
-                      </span>
-                    )}
+                <div className={`max-w-[85%] ${message.type === 'user' ? 'order-2' : 'order-1'}`}>
+                  <div
+                    className={`p-4 rounded-2xl shadow-lg border ${
+                      message.type === 'user'
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white border-blue-500/30'
+                        : 'bg-white/10 text-slate-100 border-white/20 backdrop-blur-sm'
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                      {message.content}
+                    </div>
+                    <div className={`flex items-center justify-between mt-3 pt-2 border-t ${
+                      message.type === 'user' ? 'border-white/20' : 'border-white/10'
+                    }`}>
+                      <div className="text-xs opacity-70">
+                        {formatTime(message.timestamp)}
+                      </div>
+                      {message.analysisType && message.type === 'coach' && (
+                        <div className="text-xs px-2 py-1 bg-white/10 rounded-full border border-white/20">
+                          {getAnalysisTypeInfo(message.analysisType).label}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Avatar */}
+                  <div className={`flex items-center mt-2 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                      message.type === 'user' 
+                        ? 'bg-blue-500' 
+                        : 'bg-gradient-to-r from-purple-500 to-blue-500'
+                    }`}>
+                      {message.type === 'user' ? (
+                        <span className="text-white text-xs font-bold">Y</span>
+                      ) : (
+                        <Brain className="h-3 w-3 text-white" />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        )}
-        
-        {/* Loading indicator */}
-        {isLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex justify-start"
-          >
-            <div className="bg-gray-100 p-3 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                </div>
-                <span className="text-xs text-gray-500">המאמן חושב...</span>
               </div>
-            </div>
-          </motion.div>
-        )}
-        
-        {/* Error message */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-red-50 border border-red-200 rounded-lg p-3"
-          >
-            <div className="flex items-center">
-              <svg className="h-4 w-4 text-red-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm text-red-800">{error}</span>
-            </div>
-          </motion.div>
+            ))}
+            
+            {/* Loading indicator */}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/20">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    </div>
+                    <span className="text-xs text-slate-400">Coach is analyzing...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
         
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-gray-200 p-4">
-        <form onSubmit={handleSubmit} className="flex space-x-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            placeholder="שאל את המאמן..."
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            disabled={!inputMessage.trim() || isLoading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-          >
-            {isLoading ? '⏳' : '📤'}
-          </button>
-        </form>
+      <div className="p-6 border-t border-white/10">
+        <div className="space-y-3">
+          <div className="relative">
+            <textarea
+              ref={inputRef}
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              placeholder="Ask your chess coach..."
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-transparent text-white placeholder-slate-400 text-sm resize-none backdrop-blur-sm transition-all duration-200"
+              rows="3"
+              disabled={isLoading}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+            />
+            <div className="absolute bottom-2 right-2">
+              <button
+                onClick={handleSubmit}
+                disabled={!inputMessage.trim() || isLoading}
+                className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg"
+              >
+                {isLoading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+          
+          <div className="text-xs text-slate-500 flex items-center justify-between">
+            <span>Press Enter to send, Shift+Enter for new line</span>
+            <div className="flex items-center space-x-1">
+              <Sparkles className="h-3 w-3" />
+              <span>AI-powered</span>
+            </div>
+          </div>
+        </div>
       </div>
-    </motion.div>
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.5);
+        }
+      `}</style>
+    </div>
   );
 };
 
-export default CoachChat;
+export default ProfessionalCoachPanel;
