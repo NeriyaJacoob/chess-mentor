@@ -1,6 +1,7 @@
-# backend-python/chess_engine.py - SIMPLE SYNC VERSION
+# backend-python/chess_engine.py - גרסה מהירה ומותאמת
 """
-Stockfish Chess Engine - Simplified Synchronous Version
+Stockfish Chess Engine - Fast Response Version
+מנוע שחמט מהיר עם תגובות מיידיות
 """
 
 import chess
@@ -10,14 +11,19 @@ import time
 from typing import Dict, Any
 
 class ChessEngine:
-    """מנוע שחמט מבוסס Stockfish - גרסה פשוטה"""
+    """מנוע שחמט מבוסס Stockfish - גרסה מהירה"""
     
-    def __init__(self, stockfish_path: str = None, skill_level: int = 5):
+    def __init__(self, stockfish_path: str = None, skill_level: int = 3):
         self.stockfish_path = stockfish_path or self._find_stockfish()
         self.skill_level = skill_level
         self.engine = None
         self.board = chess.Board()
         self.game_history = []
+        
+        # ✅ הגדרות מהירות
+        self.fast_mode = True
+        self.max_think_time = 0.5  # חצי שנייה מקסימום
+        self.min_think_time = 0.1  # מינימום 100ms
         
     def _find_stockfish(self) -> str:
         """מציאת נתיב Stockfish"""
@@ -28,7 +34,6 @@ class ChessEngine:
             print(f"✅ Found Stockfish: {env_path}")
             return env_path
         
-        # נתיבים נפוצים
         common_paths = [
             'stockfish',
             'stockfish.exe',
@@ -45,18 +50,26 @@ class ChessEngine:
         raise FileNotFoundError("Stockfish not found")
     
     def start_engine(self):
-        """התחלת מנוע Stockfish - גרסה סינכרונית"""
+        """התחלת מנוע Stockfish מהיר"""
         try:
             if not self.engine:
-                print(f"🚀 Starting Stockfish: {self.stockfish_path}")
+                print(f"🚀 Starting FAST Stockfish: {self.stockfish_path}")
                 self.engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)
                 
-                # הגדרת רמת המשחק
+                # ✅ הגדרות מהירות למנוע
                 try:
-                    self.engine.configure({"Skill Level": self.skill_level})
-                    print(f"✅ Stockfish started - Skill Level: {self.skill_level}")
-                except:
-                    print(f"⚠️ Could not set skill level, using default")
+                    # הגדרת רמת skill נמוכה למהירות
+                    fast_skill = min(self.skill_level, 8)  # מקסימום רמה 8
+                    self.engine.configure({
+                        "Skill Level": fast_skill,
+                        "Hash": 16,  # מעט זיכרון למהירות
+                        "Threads": 1,  # thread אחד למהירות
+                        "Move Overhead": 50,  # overhead נמוך
+                        "nodestime": 1000  # פחות nodes לחישוב
+                    })
+                    print(f"✅ FAST Stockfish ready - Level: {fast_skill}")
+                except Exception as e:
+                    print(f"⚠️ Could not configure fast settings: {e}")
                 
         except Exception as e:
             print(f"❌ Failed to start Stockfish: {e}")
@@ -65,16 +78,102 @@ class ChessEngine:
     def stop_engine(self):
         """עצירת המנוע"""
         if self.engine:
-            self.engine.quit()
+            try:
+                self.engine.quit()
+            except:
+                pass
             self.engine = None
             print("🔴 Stockfish stopped")
     
+    def _get_fast_time_limit(self, base_time: float = None) -> float:
+        """חישוב זמן חשיבה מהיר"""
+        if not self.fast_mode:
+            return base_time or 1.0
+            
+        # ✅ זמנים מהירים לפי רמת הקושי
+        time_by_level = {
+            1: 0.1,   # מיידי
+            2: 0.15,  # מהיר מאוד
+            3: 0.2,   # מהיר
+            4: 0.3,   # נורמלי
+            5: 0.4,   # קצת איטי
+            6: 0.5,   # בינוני
+            7: 0.6,   # חכם
+            8: 0.8,   # מומחה
+        }
+        
+        return time_by_level.get(self.skill_level, 0.3)
+    
+    def get_ai_move(self, time_limit: float = None) -> Dict[str, Any]:
+        """קבלת מהלך AI מהיר"""
+        if not self.engine:
+            self.start_engine()
+            
+        if self.board.is_game_over():
+            return {
+                "success": False,
+                "error": "Game is over",
+                "is_game_over": True
+            }
+        
+        try:
+            # ✅ זמן חשיבה מהיר
+            think_time = self._get_fast_time_limit(time_limit)
+            print(f"🤖 AI thinking for {think_time}s (Level {self.skill_level})")
+            
+            start_time = time.time()
+            
+            # ✅ חישוב מהיר עם timeout קצר
+            result = self.engine.play(
+                self.board, 
+                chess.engine.Limit(time=think_time),
+                info=chess.engine.INFO_NONE  # ללא מידע נוסף למהירות
+            )
+            
+            actual_time = time.time() - start_time
+            print(f"⚡ AI decided in {actual_time:.2f}s: {result.move}")
+            
+            if result.move:
+                san_notation = self.board.san(result.move)
+                self.board.push(result.move)
+                
+                self.game_history.append({
+                    "move": result.move.uci(),
+                    "san": san_notation,
+                    "timestamp": time.time(),
+                    "think_time": actual_time
+                })
+                
+                return {
+                    "success": True,
+                    "move": result.move.uci(),
+                    "san": san_notation,
+                    "fen": self.board.fen(),
+                    "legal_moves": [m.uci() for m in self.board.legal_moves],
+                    "turn": "black" if self.board.turn else "white",
+                    "is_game_over": self.board.is_game_over(),
+                    "think_time": actual_time
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Engine returned no move"
+                }
+                
+        except Exception as e:
+            print(f"❌ AI move failed: {e}")
+            return {
+                "success": False,
+                "error": f"Engine error: {str(e)}"
+            }
+    
     def _skill_to_elo(self, skill_level: int) -> int:
-        """המרת רמת skill ל-ELO משוער"""
-        return 800 + (skill_level * 110)
+        """המרת רמת skill ל-ELO משוער - מהירות"""
+        # ✅ רמות נמוכות יותר למהירות
+        return 800 + (skill_level * 150)
     
     def new_game(self) -> Dict[str, Any]:
-        """התחלת משחק חדש"""
+        """התחלת משחק חדש מהיר"""
         self.board = chess.Board()
         self.game_history = []
         
@@ -83,11 +182,12 @@ class ChessEngine:
             "legal_moves": [move.uci() for move in self.board.legal_moves],
             "turn": "white",
             "status": "active",
-            "move_count": 0
+            "move_count": 0,
+            "fast_mode": self.fast_mode
         }
     
     def make_move(self, move_uci: str) -> Dict[str, Any]:
-        """ביצוע מהלך על הלוח"""
+        """ביצוע מהלך מהיר"""
         try:
             move = chess.Move.from_uci(move_uci)
             
@@ -98,11 +198,9 @@ class ChessEngine:
                     "legal_moves": [m.uci() for m in self.board.legal_moves]
                 }
             
-            # Get SAN notation before making the move
             san_notation = self.board.san(move)
-            
-            # ביצוע המהלך
             self.board.push(move)
+            
             self.game_history.append({
                 "move": move_uci,
                 "san": san_notation,
@@ -115,104 +213,21 @@ class ChessEngine:
                 "san": san_notation,
                 "fen": self.board.fen(),
                 "legal_moves": [m.uci() for m in self.board.legal_moves],
-                "turn": "black" if self.board.turn == chess.BLACK else "white",
-                "is_check": self.board.is_check(),
-                "is_checkmate": self.board.is_checkmate(),
-                "is_stalemate": self.board.is_stalemate(),
-                "is_game_over": self.board.is_game_over(),
-                "move_count": len(self.game_history)
+                "turn": "black" if self.board.turn else "white",
+                "is_game_over": self.board.is_game_over()
             }
             
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Invalid move format: {move_uci}",
-                "details": str(e)
+                "error": f"Invalid move: {str(e)}"
             }
-    
-    def get_ai_move(self, time_limit: float = 1.0) -> Dict[str, Any]:
-        """קבלת מהלך מהמנוע AI - גרסה סינכרונית"""
-        if not self.engine:
-            self.start_engine()
-        
-        if self.board.is_game_over():
-            return {
-                "success": False,
-                "error": "Game is over",
-                "game_result": self.get_game_result()
-            }
-        
-        try:
-            print(f"🤖 AI thinking for {time_limit}s...")
-            
-            # חישוב המהלך הטוב ביותר
-            result = self.engine.play(
-                self.board, 
-                chess.engine.Limit(time=time_limit)
-            )
-            
-            if result.move:
-                # Get SAN notation before making the move
-                san_notation = self.board.san(result.move)
-                move_uci = result.move.uci()
-                
-                print(f"🤖 AI chose: {move_uci} ({san_notation})")
-                
-                # ביצוע המהלך
-                self.board.push(result.move)
-                
-                self.game_history.append({
-                    "move": move_uci,
-                    "san": san_notation,
-                    "timestamp": time.time(),
-                    "is_ai": True
-                })
-                
-                return {
-                    "success": True,
-                    "move": move_uci,
-                    "san": san_notation,
-                    "fen": self.board.fen(),
-                    "legal_moves": [m.uci() for m in self.board.legal_moves],
-                    "turn": "black" if self.board.turn == chess.BLACK else "white",
-                    "is_check": self.board.is_check(),
-                    "is_checkmate": self.board.is_checkmate(),
-                    "is_stalemate": self.board.is_stalemate(),
-                    "is_game_over": self.board.is_game_over(),
-                    "move_count": len(self.game_history)
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": "Engine couldn't find a move"
-                }
-                
-        except Exception as e:
-            print(f"❌ Engine error: {e}")
-            return {
-                "success": False,
-                "error": f"Engine error: {str(e)}"
-            }
-    
-    def get_position_info(self) -> Dict[str, Any]:
-        """מידע על המיקום הנוכחי"""
-        return {
-            "fen": self.board.fen(),
-            "turn": "black" if self.board.turn == chess.BLACK else "white",
-            "legal_moves": [move.uci() for move in self.board.legal_moves],
-            "is_check": self.board.is_check(),
-            "is_checkmate": self.board.is_checkmate(),
-            "is_stalemate": self.board.is_stalemate(),
-            "is_game_over": self.board.is_game_over(),
-            "move_count": len(self.game_history),
-            "history": self.game_history[-10:],
-            "can_castle_kingside": self.board.has_kingside_castling_rights(self.board.turn),
-            "can_castle_queenside": self.board.has_queenside_castling_rights(self.board.turn)
-        }
     
     def get_game_result(self) -> str:
-        """קבלת תוצאת המשחק"""
-        if self.board.is_checkmate():
+        """תוצאת המשחק"""
+        if not self.board.is_game_over():
+            return "game in progress"
+        elif self.board.is_checkmate():
             winner = "black" if self.board.turn == chess.WHITE else "white"
             return f"{winner} wins by checkmate"
         elif self.board.is_stalemate():
@@ -227,9 +242,31 @@ class ChessEngine:
             return "game in progress"
     
     def set_skill_level(self, level: int):
-        """עדכון רמת הקושי"""
-        self.skill_level = max(0, min(20, level))
-        print(f"🎯 Skill level set to: {self.skill_level} (ELO: ~{self._skill_to_elo(self.skill_level)})")
+        """עדכון רמת הקושי - מהיר"""
+        # ✅ הגבל לרמות נמוכות למהירות
+        self.skill_level = max(1, min(8, level))
+        print(f"🎯 FAST skill level: {self.skill_level} (ELO: ~{self._skill_to_elo(self.skill_level)})")
+        
+        # ✅ עדכן הגדרות מהירות אם המנוע פועל
+        if self.engine:
+            try:
+                self.engine.configure({
+                    "Skill Level": self.skill_level,
+                    "Hash": 16,  # קטן למהירות
+                    "Threads": 1
+                })
+            except:
+                pass
+    
+    def set_fast_mode(self, enabled: bool):
+        """הפעל/כבה מצב מהיר"""
+        self.fast_mode = enabled
+        if enabled:
+            self.max_think_time = 0.5
+            print("⚡ Fast mode enabled - quick responses")
+        else:
+            self.max_think_time = 2.0
+            print("🐌 Normal mode enabled - thoughtful moves")
     
     def load_fen(self, fen: str) -> bool:
         """טעינת מיקום מ-FEN"""
@@ -241,13 +278,14 @@ class ChessEngine:
             print(f"❌ Invalid FEN: {e}")
             return False
 
-# Instance גלובלי
-chess_engine = ChessEngine()
+# ✅ Instance גלובלי מהיר
+chess_engine = ChessEngine(skill_level=3)  # התחל מרמה נמוכה
 
-# Helper functions
-def init_engine(skill_level: int = 5):
-    """אתחול המנוע"""
+# ✅ Helper functions מהירים
+def init_engine(skill_level: int = 3):
+    """אתחול מנוע מהיר"""
     chess_engine.set_skill_level(skill_level)
+    chess_engine.set_fast_mode(True)  # מצב מהיר
     chess_engine.start_engine()
 
 def cleanup_engine():
@@ -255,17 +293,21 @@ def cleanup_engine():
     chess_engine.stop_engine()
 
 def test_stockfish():
-    """בדיקת Stockfish"""
+    """בדיקת Stockfish מהירה"""
     try:
-        test_engine = ChessEngine()
+        test_engine = ChessEngine(skill_level=1)
+        test_engine.set_fast_mode(True)
         test_engine.start_engine()
         
-        # Test a simple move
-        result = test_engine.get_ai_move(1.0)
+        # Test move מהיר
+        start_time = time.time()
+        result = test_engine.get_ai_move(0.1)  # 100ms test
+        test_time = time.time() - start_time
+        
         test_engine.stop_engine()
         
         if result['success']:
-            print(f"✅ Stockfish test passed: {result['move']}")
+            print(f"✅ FAST Stockfish test passed: {result['move']} in {test_time:.2f}s")
             return True
         else:
             print(f"❌ Stockfish test failed: {result['error']}")
@@ -274,3 +316,8 @@ def test_stockfish():
     except Exception as e:
         print(f"❌ Stockfish test error: {e}")
         return False
+
+# ✅ Test מהירות בעת import
+if __name__ == "__main__":
+    print("🚀 Testing fast chess engine...")
+    test_stockfish()

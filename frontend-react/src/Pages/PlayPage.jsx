@@ -1,86 +1,122 @@
-import React, { useState, useEffect } from 'react';
+// frontend-react/src/Pages/PlayPage.jsx - גרסה נקיה עם כלי שחמט שעובדים
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSelector, useDispatch, shallowEqual } from 'react-redux';
 import { 
-  RotateCcw, 
+  Clock, 
+  Target, 
+  PlayCircle, 
+  Settings, 
   RotateCw, 
-  Square, 
-  Flag,
-  Settings,
-  Trophy,
-  Brain,
-  Zap,
-  Clock,
-  Target,
-  Cpu,
+  Flag, 
   Activity,
-  PlayCircle,
-  Pause
+  Zap,
+  Crown,
+  Brain,
+  Timer
 } from 'lucide-react';
 
-const ProfessionalPlayPage = () => {
+// ✅ Import the optimized FastChessBoard component
+import FastChessBoard from '../components/ChessBoard/ChessBoard';
+import chessApiService from '../services/chessApiService';
+import { makeMove, newGame, loadGame } from '../store/slices/gameSlice';
+
+// ✅ Try to import performance monitor, with fallback
+let performanceMonitor = {
+  trackApiCall: () => {},
+  trackRender: () => {},
+  trackMoveProcessing: () => {},
+  runBenchmark: async () => ({ message: 'Performance monitoring not available' }),
+  getReport: () => ({ summary: {} })
+};
+
+try {
+  const perfModule = require('../utils/performanceMonitor');
+  performanceMonitor = perfModule.default || performanceMonitor;
+} catch (error) {
+  console.log('📊 Performance monitoring not available');
+}
+
+const PlayPage = () => {
+  const dispatch = useDispatch();
+  
+  // ✅ Optimized selector with shallow comparison for minimal re-renders
+  const { fen, history, isGameOver, gameResult } = useSelector(state => ({
+    fen: state.game.fen,
+    history: state.game.history,
+    isGameOver: state.game.isGameOver,
+    gameResult: state.game.gameResult
+  }), shallowEqual);
+  
   // Game state
-  const [aiLevel, setAiLevel] = useState(5);
   const [isGameActive, setIsGameActive] = useState(false);
   const [isStartingGame, setIsStartingGame] = useState(false);
-  const [aiThinking, setAiThinking] = useState(false);
-  const [opponent, setOpponent] = useState(null);
-  const [error, setError] = useState(null);
-  const [gameResult, setGameResult] = useState(null);
+  const [aiLevel, setAiLevel] = useState(3);
   const [playerColor, setPlayerColor] = useState('white');
-  const [moveCount, setMoveCount] = useState(0);
   const [gameTime, setGameTime] = useState(0);
+  const [moveCount, setMoveCount] = useState(0);
+  const [aiThinking, setAiThinking] = useState(false);
+  const [lastMoveResult, setLastMoveResult] = useState(null);
+  const [gameError, setGameError] = useState(null);
+  const [aiThinkTime, setAiThinkTime] = useState(0);
+  const [pieceStyle, setPieceStyle] = useState('unicode');
 
-  // Mock chess board (8x8 grid)
-  const createInitialBoard = () => {
-    const pieces = {
-      'a8': '♜', 'b8': '♞', 'c8': '♝', 'd8': '♛', 'e8': '♚', 'f8': '♝', 'g8': '♞', 'h8': '♜',
-      'a7': '♟', 'b7': '♟', 'c7': '♟', 'd7': '♟', 'e7': '♟', 'f7': '♟', 'g7': '♟', 'h7': '♟',
-      'a2': '♙', 'b2': '♙', 'c2': '♙', 'd2': '♙', 'e2': '♙', 'f2': '♙', 'g2': '♙', 'h2': '♙',
-      'a1': '♖', 'b1': '♘', 'c1': '♗', 'd1': '♕', 'e1': '♔', 'f1': '♗', 'g1': '♘', 'h1': '♖'
-    };
+  // ✅ הגדרות מהירות למנוע
+  const speedSettings = [
+    { name: 'Instant', time: 0.1, desc: 'Immediate response' },
+    { name: 'Fast', time: 0.3, desc: 'Quick moves' },
+    { name: 'Normal', time: 0.5, desc: 'Balanced play' },
+    { name: 'Slow', time: 1.0, desc: 'Thoughtful moves' }
+  ];
+  const [speedSetting, setSpeedSetting] = useState(1); // Fast by default
 
-    const board = [];
-    for (let rank = 8; rank >= 1; rank--) {
-      const row = [];
-      for (let file = 0; file < 8; file++) {
-        const square = String.fromCharCode(97 + file) + rank;
-        const isLight = (rank + file) % 2 === 0;
-        row.push({
-          square,
-          piece: pieces[square] || null,
-          isLight,
-          isHighlighted: false
-        });
-      }
-      board.push(row);
-    }
-    return board;
-  };
-
-  const [board, setBoard] = useState(createInitialBoard());
-
-  // Mock game timer
+  // Timer effect
   useEffect(() => {
     let interval;
-    if (isGameActive && !aiThinking && !gameResult) {
+    if (isGameActive && !isGameOver) {
       interval = setInterval(() => {
         setGameTime(prev => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isGameActive, aiThinking, gameResult]);
+  }, [isGameActive, isGameOver]);
 
-  const aiLevels = [
-    { level: 1, name: 'Beginner', elo: '800', description: 'Perfect for learning', color: 'from-green-500/20 to-emerald-500/20', stars: 1 },
-    { level: 2, name: 'Novice', elo: '1000', description: 'Easy opponent', color: 'from-green-500/20 to-emerald-500/20', stars: 1 },
-    { level: 3, name: 'Amateur', elo: '1200', description: 'Casual play', color: 'from-blue-500/20 to-cyan-500/20', stars: 2 },
-    { level: 4, name: 'Club Player', elo: '1400', description: 'Intermediate challenge', color: 'from-blue-500/20 to-cyan-500/20', stars: 2 },
-    { level: 5, name: 'Strong Club', elo: '1600', description: 'Solid opponent', color: 'from-purple-500/20 to-violet-500/20', stars: 3 },
-    { level: 6, name: 'Expert', elo: '1800', description: 'Advanced play', color: 'from-purple-500/20 to-violet-500/20', stars: 3 },
-    { level: 7, name: 'Master', elo: '2000', description: 'Strong master', color: 'from-orange-500/20 to-red-500/20', stars: 4 },
-    { level: 8, name: 'Strong Master', elo: '2200', description: 'Expert level', color: 'from-orange-500/20 to-red-500/20', stars: 4 },
-    { level: 9, name: 'Grandmaster', elo: '2400', description: 'Professional level', color: 'from-red-500/20 to-pink-500/20', stars: 5 },
-    { level: 10, name: 'Super GM', elo: '2600+', description: 'Maximum strength', color: 'from-red-500/20 to-pink-500/20', stars: 5 }
-  ];
+  // ✅ AI thinking timer
+  useEffect(() => {
+    let interval;
+    if (aiThinking) {
+      setAiThinkTime(0);
+      interval = setInterval(() => {
+        setAiThinkTime(prev => prev + 0.1);
+      }, 100);
+    }
+    return () => clearInterval(interval);
+  }, [aiThinking]);
+
+  // ✅ Performance monitoring effect
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const updatePerformanceDisplay = () => {
+        const report = performanceMonitor.getReport();
+        
+        const clickElement = document.getElementById('click-response');
+        if (clickElement && report.summary.clickToResponse) {
+          const avg = report.summary.clickToResponse.average;
+          clickElement.textContent = `Click: ${avg.toFixed(0)}ms`;
+          clickElement.className = avg > 100 ? 'text-red-400 font-mono' : 'text-green-400 font-mono';
+        }
+        
+        const moveElement = document.getElementById('move-time');
+        if (moveElement && report.summary.moveProcessing) {
+          const avg = report.summary.moveProcessing.average;
+          moveElement.textContent = `Move: ${avg.toFixed(0)}ms`;
+          moveElement.className = avg > 1000 ? 'text-red-400 font-mono' : 'text-blue-400 font-mono';
+        }
+      };
+      
+      const interval = setInterval(updatePerformanceDisplay, 2000);
+      return () => clearInterval(interval);
+    }
+  }, []);
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -88,70 +124,155 @@ const ProfessionalPlayPage = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleNewGame = () => {
-    setIsStartingGame(true);
-    setError(null);
-    setTimeout(() => {
-      setIsGameActive(true);
-      setIsStartingGame(false);
-      setOpponent({
-        name: `Stockfish Level ${aiLevel}`,
-        elo: aiLevels[aiLevel - 1].elo,
-        level: aiLevel
-      });
-      setMoveCount(0);
-      setGameTime(0);
-      setGameResult(null);
-    }, 1500);
+  const formatThinkTime = (seconds) => {
+    return `${seconds.toFixed(1)}s`;
   };
 
-  const handleResign = () => {
-    setGameResult('You resigned');
-    setIsGameActive(false);
-  };
-
-  const ChessSquare = ({ square, piece, isLight, isHighlighted }) => (
-    <div 
-      className={`
-        aspect-square flex items-center justify-center text-4xl font-bold cursor-pointer
-        transition-all duration-200 hover:scale-105 border border-slate-600/20
-        ${isLight ? 'bg-slate-200' : 'bg-slate-400'}
-        ${isHighlighted ? 'ring-2 ring-blue-400 ring-opacity-70' : ''}
-        hover:brightness-110
-      `}
-    >
-      {piece && (
-        <span className="drop-shadow-lg hover:scale-110 transition-transform duration-200">
-          {piece}
-        </span>
-      )}
-    </div>
-  );
-
-  const ChessBoard = () => (
-    <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-white/10 shadow-2xl">
-      <div className="grid grid-cols-8 gap-0 max-w-[480px] mx-auto rounded-lg overflow-hidden shadow-inner bg-slate-300">
-        {board.flat().map((square, index) => (
-          <ChessSquare
-            key={square.square}
-            square={square.square}
-            piece={square.piece}
-            isLight={square.isLight}
-            isHighlighted={square.isHighlighted}
-          />
-        ))}
-      </div>
+  // ✅ התחלת משחק מהיר
+  const handleNewGame = async () => {
+    try {
+      setIsStartingGame(true);
+      setGameError(null);
+      setAiThinkTime(0);
       
-      {/* Board coordinates */}
-      <div className="flex justify-between mt-2 px-2">
-        {['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(file => (
-          <span key={file} className="text-slate-400 text-sm font-mono w-[60px] text-center">
-            {file}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
+      console.log('🎮 Starting FAST game...', { aiLevel, playerColor, speed: speedSettings[speedSetting] });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Game start timeout')), 5000)
+      );
+      
+      const gamePromise = chessApiService.newGame(aiLevel, playerColor);
+      const response = await Promise.race([gamePromise, timeoutPromise]);
+      
+      console.log('✅ Game started quickly:', response);
+      
+      setIsGameActive(true);
+      setGameTime(0);
+      setMoveCount(0);
+      setLastMoveResult(response);
+      
+      dispatch(newGame());
+      if (response.position?.fen) {
+        dispatch(loadGame({ 
+          fen: response.position.fen, 
+          history: [] 
+        }));
+      }
+      
+      if (response.ai_move) {
+        console.log('🤖 AI opened with:', response.ai_move);
+        setMoveCount(1);
+        dispatch(makeMove({ 
+          from: response.ai_move.move.slice(0, 2), 
+          to: response.ai_move.move.slice(2, 4) 
+        }));
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to start game:', error);
+      setGameError(error.message || 'Failed to start game');
+    } finally {
+      setIsStartingGame(false);
+    }
+  };
+
+  // ✅ מהלכים מהירים עם מעקב ביצועים
+  const handleMove = useCallback(async (move) => {
+    if (!isGameActive || aiThinking || !chessApiService.isGameActive()) {
+      console.log('🚫 Move blocked:', { isGameActive, aiThinking, hasGameId: chessApiService.isGameActive() });
+      return false;
+    }
+
+    const moveStartTime = performance.now();
+    
+    try {
+      console.log('🎯 Making FAST move:', move);
+      setAiThinking(true);
+      setGameError(null);
+      setAiThinkTime(0);
+
+      const uciMove = typeof move === 'string' ? move : `${move.from}${move.to}${move.promotion || ''}`;
+      
+      const apiStartTime = performance.now();
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Move timeout - AI took too long')), 8000)
+      );
+      
+      const movePromise = chessApiService.makeMove(uciMove);
+      const response = await Promise.race([movePromise, timeoutPromise]);
+      
+      performanceMonitor.trackApiCall('makeMove', apiStartTime);
+      
+      console.log('✅ Fast move response:', response);
+      
+      const uiUpdateStart = performance.now();
+      
+      dispatch(makeMove(move));
+      setMoveCount(prev => prev + 1);
+      setLastMoveResult(response);
+      
+      performanceMonitor.trackRender('moveUpdate', uiUpdateStart);
+      
+      if (response.ai_move && !response.game_over) {
+        console.log('🤖 AI responded quickly:', response.ai_move);
+        
+        const aiMoveStart = performance.now();
+        
+        setTimeout(() => {
+          dispatch(makeMove({ 
+            from: response.ai_move.move.slice(0, 2), 
+            to: response.ai_move.move.slice(2, 4) 
+          }));
+          setMoveCount(prev => prev + 1);
+          
+          performanceMonitor.trackRender('aiMoveUpdate', aiMoveStart);
+        }, 150);
+      }
+      
+      if (response.game_over) {
+        setIsGameActive(false);
+        console.log('🏁 Game ended:', response.game_result);
+      }
+      
+      performanceMonitor.trackMoveProcessing(
+        { 
+          move: uciMove, 
+          aiResponse: response.ai_move?.move,
+          gameOver: response.game_over 
+        }, 
+        moveStartTime
+      );
+      
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Move failed:', error);
+      setGameError(error.message || 'Move failed');
+      
+      performanceMonitor.trackMoveProcessing(
+        { move: move, error: error.message }, 
+        moveStartTime, 
+        performance.now()
+      );
+      
+      return false;
+    } finally {
+      setAiThinking(false);
+    }
+  }, [isGameActive, aiThinking, dispatch]);
+
+  const handleResign = async () => {
+    if (!isGameActive) return;
+    
+    try {
+      await chessApiService.resign();
+      setIsGameActive(false);
+      console.log('🏳️ Game resigned');
+    } catch (error) {
+      console.error('❌ Resign failed:', error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
@@ -168,159 +289,260 @@ const ProfessionalPlayPage = () => {
             }`}></div>
             <span className="text-white font-semibold">
               {isGameActive ? 'Game Active' : 
-               isStartingGame ? 'Initializing...' : 
-               'Ready to Play'}
+               isStartingGame ? 'Starting Game...' : 'Ready to Play'}
             </span>
-            <div className="flex items-center text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded-full border border-blue-400/20">
-              <Cpu className="h-3 w-3 mr-1" />
-              Stockfish
-            </div>
+            {aiThinking && (
+              <div className="flex items-center space-x-2 text-purple-400">
+                <Activity className="h-4 w-4 animate-spin" />
+                <span className="text-sm">{formatThinkTime(aiThinkTime)}</span>
+              </div>
+            )}
           </div>
-
-          {error && (
-            <div className="bg-red-500/20 border border-red-500/30 text-red-300 px-3 py-2 rounded-lg text-sm mb-4">
-              <div className="flex items-center justify-between">
-                <span>{error}</span>
-                <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">×</button>
-              </div>
+          
+          {/* Error Display */}
+          {gameError && (
+            <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
+              <p className="text-red-300 text-sm">{gameError}</p>
             </div>
           )}
-
-          {opponent && isGameActive && (
-            <div className="bg-blue-500/20 border border-blue-500/30 text-blue-300 px-3 py-2 rounded-lg text-sm mb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-semibold">🤖 {opponent.name}</div>
-                  <div className="text-xs opacity-80">ELO: {opponent.elo}</div>
-                </div>
-                <Trophy className="h-4 w-4" />
-              </div>
-            </div>
-          )}
-
-          {aiThinking && isGameActive && (
-            <div className="bg-purple-500/20 border border-purple-500/30 text-purple-300 px-3 py-2 rounded-lg text-sm mb-4">
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-400 mr-2"></div>
-                <span>AI analyzing position...</span>
-              </div>
-            </div>
-          )}
-
-          {gameResult && (
-            <div className="bg-green-500/20 border border-green-500/30 text-green-300 px-3 py-2 rounded-lg text-sm mb-4">
-              <div className="font-semibold">🏁 Game Complete</div>
-              <div className="text-xs">{gameResult}</div>
+          
+          {/* Quick Status */}
+          {lastMoveResult && (
+            <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+              <p className="text-blue-300 text-sm">
+                Game: {lastMoveResult.game_id?.slice(0, 8)}...
+              </p>
+              {lastMoveResult.ai_move && (
+                <p className="text-blue-300 text-sm">
+                  Last: {lastMoveResult.ai_move.san}
+                </p>
+              )}
             </div>
           )}
         </div>
 
-        {/* AI Level Selection */}
-        <div className="p-6 border-b border-white/10 flex-1 overflow-y-auto">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-            <Brain className="h-5 w-5 mr-2 text-blue-400" />
-            Engine Difficulty
+        {/* ✅ Speed Settings */}
+        <div className="p-6 border-b border-white/10">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+            <Zap className="h-5 w-5 mr-2 text-yellow-400" />
+            Game Speed
           </h3>
           
-          <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
-            {aiLevels.map((level) => (
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {speedSettings.map((setting, index) => (
               <button
-                key={level.level}
-                onClick={() => !isGameActive && setAiLevel(level.level)}
-                disabled={isGameActive || isStartingGame}
-                className={`w-full text-left p-4 rounded-xl border transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  aiLevel === level.level
-                    ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-blue-400/50 text-blue-300 shadow-lg'
-                    : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:border-white/20'
+                key={index}
+                onClick={() => setSpeedSetting(index)}
+                disabled={isGameActive}
+                className={`p-3 rounded-lg border transition-all duration-300 text-sm ${
+                  speedSetting === index
+                    ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-300'
+                    : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
                 }`}
               >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="font-bold">{level.name}</span>
-                      <div className="flex">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className={`text-xs ${i < level.stars ? 'text-yellow-400' : 'text-slate-600'}`}>
-                            ★
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="text-sm opacity-75 mb-2">{level.description}</div>
-                    <div className="text-xs font-mono bg-slate-700/50 px-2 py-1 rounded">
-                      ELO: {level.elo}
-                    </div>
-                  </div>
-                </div>
+                <div className="font-medium">{setting.name}</div>
+                <div className="text-xs opacity-75">{setting.time}s</div>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Game Controls */}
-        <div className="p-6">
-          <div className="space-y-3">
-            <button
-              onClick={handleNewGame}
-              disabled={isStartingGame}
-              className="w-full flex items-center justify-center space-x-3 px-4 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl font-semibold"
-            >
-              {isStartingGame ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span>Initializing Engine...</span>
-                </>
-              ) : (
-                <>
-                  <PlayCircle className="h-5 w-5" />
-                  <span>New Game</span>
-                </>
-              )}
-            </button>
-            
-            <div className="grid grid-cols-2 gap-2">
-              <button className="flex items-center justify-center space-x-2 px-3 py-3 bg-white/10 text-slate-300 rounded-xl hover:bg-white/20 transition-all duration-300 border border-white/10">
-                <RotateCw className="h-4 w-4" />
-                <span className="text-sm">Flip</span>
-              </button>
-              <button className="flex items-center justify-center space-x-2 px-3 py-3 bg-white/10 text-slate-300 rounded-xl hover:bg-white/20 transition-all duration-300 border border-white/10">
-                <Settings className="h-4 w-4" />
-                <span className="text-sm">Setup</span>
-              </button>
+        {/* Engine Settings */}
+        <div className="p-6 border-b border-white/10">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+            <Brain className="h-5 w-5 mr-2 text-purple-400" />
+            Engine Level
+          </h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Difficulty: Level {aiLevel}
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="8"
+                value={aiLevel}
+                onChange={(e) => setAiLevel(parseInt(e.target.value))}
+                disabled={isGameActive}
+                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer slider"
+              />
+              <div className="flex justify-between text-xs text-slate-400 mt-1">
+                <span>Beginner</span>
+                <span>Strong</span>
+              </div>
             </div>
 
-            {isGameActive && (
-              <button
-                onClick={handleResign}
-                className="w-full flex items-center space-x-3 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-lg"
-              >
-                <Flag className="h-5 w-5" />
-                <span className="font-semibold">Resign Game</span>
-              </button>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Play as
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setPlayerColor('white')}
+                  disabled={isGameActive}
+                  className={`p-3 rounded-lg border transition-all duration-300 ${
+                    playerColor === 'white'
+                      ? 'bg-white/20 border-white/30 text-white'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  ♔ White
+                </button>
+                <button
+                  onClick={() => setPlayerColor('black')}
+                  disabled={isGameActive}
+                  className={`p-3 rounded-lg border transition-all duration-300 ${
+                    playerColor === 'black'
+                      ? 'bg-white/20 border-white/30 text-white'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  ♚ Black
+                </button>
+              </div>
+            </div>
+
+            {/* ✅ Piece Style Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Piece Style
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setPieceStyle('unicode')}
+                  disabled={isGameActive}
+                  className={`p-2 rounded-lg border transition-all duration-300 text-sm ${
+                    pieceStyle === 'unicode'
+                      ? 'bg-purple-500/20 border-purple-500/30 text-purple-300'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  ♔♛ Unicode
+                </button>
+                <button
+                  onClick={() => setPieceStyle('text')}
+                  disabled={isGameActive}
+                  className={`p-2 rounded-lg border transition-all duration-300 text-sm ${
+                    pieceStyle === 'text'
+                      ? 'bg-purple-500/20 border-purple-500/30 text-purple-300'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  KQ Text
+                </button>
+              </div>
+            </div>
           </div>
+        </div>
+
+        {/* Game Controls */}
+        <div className="p-6 space-y-4">
+          <button
+            onClick={handleNewGame}
+            disabled={isStartingGame}
+            className="w-full flex items-center justify-center space-x-3 px-4 py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-300 shadow-lg disabled:opacity-50"
+          >
+            {isStartingGame ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>Starting Fast Game...</span>
+              </>
+            ) : (
+              <>
+                <PlayCircle className="h-5 w-5" />
+                <span>Quick Game</span>
+              </>
+            )}
+          </button>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <button className="flex items-center justify-center space-x-2 px-3 py-3 bg-white/10 text-slate-300 rounded-xl hover:bg-white/20 transition-all duration-300 border border-white/10">
+              <RotateCw className="h-4 w-4" />
+              <span className="text-sm">Flip</span>
+            </button>
+            <button className="flex items-center justify-center space-x-2 px-3 py-3 bg-white/10 text-slate-300 rounded-xl hover:bg-white/20 transition-all duration-300 border border-white/10">
+              <Settings className="h-4 w-4" />
+              <span className="text-sm">Setup</span>
+            </button>
+          </div>
+
+          {/* ✅ Development Tools */}
+          {process.env.NODE_ENV === 'development' && (
+            <>
+              <button
+                onClick={() => {
+                  console.log('🏃 Running performance test...');
+                  performanceMonitor.runBenchmark().then(results => {
+                    console.log('📊 Benchmark completed:', results);
+                  });
+                }}
+                className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-purple-500/20 text-purple-300 rounded-xl hover:bg-purple-500/30 transition-all duration-300 border border-purple-500/30 text-sm"
+              >
+                <Zap className="h-4 w-4" />
+                <span>Performance Test</span>
+              </button>
+              
+              <button
+                onClick={() => {
+                  console.log('🧪 Testing pieces: ♔♕♖♗♘♙ ♚♛♜♝♞♟');
+                  console.log('Current FEN:', fen);
+                  
+                  // ✅ Manual test of piece display
+                  if (window.testChessPieces) {
+                    window.testChessPieces();
+                  } else {
+                    console.log('Test function not available');
+                  }
+                  
+                  // ✅ Test direct mapping
+                  const testPieces = ['K', 'Q', 'R', 'B', 'N', 'P', 'k', 'q', 'r', 'b', 'n', 'p'];
+                  testPieces.forEach(piece => {
+                    console.log(`Direct test: ${piece} → should be symbol, got:`, piece);
+                  });
+                }}
+                className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-green-500/20 text-green-300 rounded-xl hover:bg-green-500/30 transition-all duration-300 border border-green-500/30 text-sm"
+              >
+                <Crown className="h-4 w-4" />
+                <span>Debug Pieces</span>
+              </button>
+            </>
+          )}
+
+          {isGameActive && (
+            <button
+              onClick={handleResign}
+              className="w-full flex items-center space-x-3 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-lg"
+            >
+              <Flag className="h-5 w-5" />
+              <span className="font-semibold">Resign</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Main Game Area */}
       <div className="flex-1 flex flex-col">
         
-        {/* Top Bar */}
+        {/* Top Bar with AI Status */}
         <div className="bg-white/5 backdrop-blur-xl border-b border-white/10 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-white">
-                {opponent ? `vs ${opponent.name}` : 'Chess Engine'}
+              <h2 className="text-2xl font-bold text-white flex items-center space-x-3">
+                <span>Chess Engine Level {aiLevel}</span>
+                {speedSettings[speedSetting] && (
+                  <span className="text-yellow-400 text-lg">⚡ {speedSettings[speedSetting].name}</span>
+                )}
               </h2>
               <p className="text-slate-400">
                 {isGameActive ? `Move ${Math.ceil(moveCount / 2)} • ${
-                  moveCount % 2 === 0 ? 'Your turn' : "Engine's turn"
-                } • ${formatTime(gameTime)}` : 'Select difficulty and start playing'}
+                  aiThinking ? 'AI thinking...' : 'Your turn'
+                } • ${formatTime(gameTime)}` : 'Fast chess with quick responses'}
               </p>
             </div>
             
             <div className="flex items-center space-x-4">
-              {/* Game Stats */}
               <div className="flex items-center space-x-4 text-sm">
                 <div className="flex items-center space-x-2 text-slate-300">
                   <Clock className="h-4 w-4" />
@@ -332,8 +554,8 @@ const ProfessionalPlayPage = () => {
                 </div>
                 {aiThinking && (
                   <div className="flex items-center space-x-2 text-purple-400">
-                    <Activity className="h-4 w-4 animate-pulse" />
-                    <span>Thinking</span>
+                    <Timer className="h-4 w-4 animate-pulse" />
+                    <span>{formatThinkTime(aiThinkTime)}</span>
                   </div>
                 )}
               </div>
@@ -341,48 +563,92 @@ const ProfessionalPlayPage = () => {
           </div>
         </div>
 
-        {/* Chess Board */}
+        {/* ✅ Chess Board with debugging */}
         <div className="flex-1 flex items-center justify-center p-8">
-          <ChessBoard />
+          <FastChessBoard 
+            size={480}
+            interactive={isGameActive && !aiThinking}
+            disabled={!isGameActive || aiThinking}
+            onMove={handleMove}
+            playerColor={playerColor}
+            showCoordinates={true}
+            pieceStyle={pieceStyle}
+            key={pieceStyle} // ✅ Force re-render when piece style changes
+          />
         </div>
 
-        {/* Bottom Status */}
+        {/* Bottom Status with Performance Info */}
         <div className="bg-white/5 backdrop-blur-xl border-t border-white/10 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
             <div>
               <div className="text-2xl font-bold text-blue-400">Level {aiLevel}</div>
-              <div className="text-sm text-slate-400">Engine Difficulty</div>
+              <div className="text-sm text-slate-400">Engine Strength</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-yellow-400">{speedSettings[speedSetting].name}</div>
+              <div className="text-sm text-slate-400">Game Speed</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-green-400">{formatTime(gameTime)}</div>
-              <div className="text-sm text-slate-400">Game Duration</div>
+              <div className="text-sm text-slate-400">Duration</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-yellow-400">{moveCount}</div>
-              <div className="text-sm text-slate-400">Moves Played</div>
+              <div className="text-2xl font-bold text-purple-400">{moveCount}</div>
+              <div className="text-sm text-slate-400">Moves</div>
             </div>
           </div>
+          
+          {/* ✅ Performance Monitor Display */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="grid grid-cols-3 gap-4 text-center text-xs">
+                <div>
+                  <div className="text-green-400 font-mono" id="click-response">
+                    Click: --ms
+                  </div>
+                  <div className="text-slate-500">Response Time</div>
+                </div>
+                <div>
+                  <div className="text-blue-400 font-mono" id="move-time">
+                    Move: --ms
+                  </div>
+                  <div className="text-slate-500">Processing</div>
+                </div>
+                <div>
+                  <div className="text-yellow-400 font-mono" id="ai-time">
+                    AI: {formatThinkTime(aiThinkTime)}
+                  </div>
+                  <div className="text-slate-500">Think Time</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
+        .slider::-webkit-slider-thumb {
+          appearance: none;
+          height: 20px;
+          width: 20px;
+          border-radius: 50%;
+          background: #8b5cf6;
+          cursor: pointer;
+          box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
         }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 2px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.3);
-          border-radius: 2px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.5);
+        
+        .slider::-moz-range-thumb {
+          height: 20px;
+          width: 20px;
+          border-radius: 50%;
+          background: #8b5cf6;
+          cursor: pointer;
+          border: none;
+          box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
         }
       `}</style>
     </div>
   );
 };
 
-export default ProfessionalPlayPage;
+export default PlayPage;

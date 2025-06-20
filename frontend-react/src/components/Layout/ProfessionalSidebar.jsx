@@ -1,4 +1,6 @@
+// frontend-react/src/components/Layout/ProfessionalSidebar.jsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom'; // ← הוספה חשובה!
 import { 
   Home, 
   Play, 
@@ -20,11 +22,13 @@ import {
   HelpCircle
 } from 'lucide-react';
 
-const ProfessionalSidebar = ({ isCollapsed = false, onToggleCollapse, activeRoute = '/' }) => {
+const ProfessionalSidebar = ({ isCollapsed = false, onToggleCollapse }) => {
+  const navigate = useNavigate(); // ← Hook לניווט
+  const location = useLocation(); // ← Hook לזיהוי הנתיב הנוכחי
   const [hoveredItem, setHoveredItem] = useState(null);
   const [engineStatus, setEngineStatus] = useState('ready');
 
-  // Mock navigation items
+  // Navigation items
   const navigationItems = [
     { 
       id: 'home', 
@@ -114,13 +118,15 @@ const ProfessionalSidebar = ({ isCollapsed = false, onToggleCollapse, activeRout
     return () => clearInterval(interval);
   }, []);
 
+  // ← תיקון הפונקציה החשובה!
   const isActiveRoute = (path) => {
-    return activeRoute === path;
+    return location.pathname === path; // השתמשות ב-location במקום activeRoute prop
   };
 
+  // ← התיקון העיקרי - שימוש ב-navigate
   const handleNavigation = (path) => {
     console.log('Navigating to:', path);
-    // Handle navigation logic here
+    navigate(path); // ← כאן קורה הניווט האמיתי!
   };
 
   const getEngineStatusConfig = () => {
@@ -172,15 +178,13 @@ const ProfessionalSidebar = ({ isCollapsed = false, onToggleCollapse, activeRout
         {!isCollapsed ? (
           <div className={`${engineConfig.bg} rounded-lg p-3 border border-white/10`}>
             <div className="flex items-center space-x-3">
-              <div className="relative">
-                <Activity className={`h-5 w-5 ${engineConfig.color}`} />
-                {engineConfig.pulse && (
-                  <div className={`absolute inset-0 ${engineConfig.color.replace('text-', 'bg-')} rounded-full animate-ping opacity-20`}></div>
-                )}
+              <div className="flex items-center space-x-2">
+                <div className={`w-3 h-3 rounded-full ${engineConfig.color.replace('text-', 'bg-')} ${engineConfig.pulse ? 'animate-pulse' : ''}`}></div>
+                <Zap className={`h-4 w-4 ${engineConfig.color}`} />
               </div>
               <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-white font-medium text-sm">Stockfish Engine</span>
+                <div className="flex items-center space-x-2">
+                  <p className="text-white font-medium text-sm">Stockfish Engine</p>
                   <div className={`w-2 h-2 rounded-full ${engineConfig.color.replace('text-', 'bg-')} ${engineConfig.pulse ? 'animate-pulse' : ''}`}></div>
                 </div>
                 <p className={`text-xs ${engineConfig.color}`}>{engineConfig.label}</p>
@@ -321,12 +325,18 @@ const ProfessionalSidebar = ({ isCollapsed = false, onToggleCollapse, activeRout
       {!isCollapsed && (
         <div className="p-4 border-t border-white/10">
           <div className="space-y-2">
-            <button className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg font-semibold">
+            <button 
+              onClick={() => handleNavigation('/play')}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg font-semibold"
+            >
               <Play className="h-4 w-4" />
               <span>Quick Play</span>
             </button>
             
-            <button className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-white/10 text-slate-300 rounded-lg hover:bg-white/20 transition-all duration-300 border border-white/10">
+            <button 
+              onClick={() => handleNavigation('/puzzles')}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-white/10 text-slate-300 rounded-lg hover:bg-white/20 transition-all duration-300 border border-white/10"
+            >
               <Target className="h-4 w-4" />
               <span>Daily Puzzle</span>
             </button>
@@ -338,12 +348,14 @@ const ProfessionalSidebar = ({ isCollapsed = false, onToggleCollapse, activeRout
       {isCollapsed && (
         <div className="p-2 border-t border-white/10 space-y-2">
           <button 
+            onClick={() => handleNavigation('/play')}
             className="w-full p-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg"
             title="Quick Play"
           >
             <Play className="h-4 w-4 mx-auto" />
           </button>
           <button 
+            onClick={() => handleNavigation('/puzzles')}
             className="w-full p-2 bg-white/10 text-slate-300 rounded-lg hover:bg-white/20 transition-all duration-300 border border-white/10"
             title="Daily Puzzle"
           >

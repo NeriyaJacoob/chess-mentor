@@ -1,5 +1,4 @@
-// src/components/ChessBoard/ChessSquare.jsx - גרסה מאוחדת
-// Single square on the chess board
+// frontend-react/src/components/ChessBoard/ChessSquare.jsx
 import React from 'react';
 import { motion } from 'framer-motion';
 
@@ -58,19 +57,30 @@ const ChessSquare = ({
     }
   };
 
-  const handleClick = () => {
+  // ✅ מטפל חזק ב-onClick
+  const handleClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('🎯 ChessSquare clicked:', square, { interactive, onClick: !!onClick });
+    
     if (interactive && onClick) {
       onClick();
     }
   };
 
   const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (interactive && onDrop) {
       onDrop(e);
     }
   };
 
   const handleDragOver = (e) => {
+    e.preventDefault();
+    
     if (interactive && onDragOver) {
       onDragOver(e);
     }
@@ -90,7 +100,7 @@ const ChessSquare = ({
 
   return (
     <motion.div
-      className="chess-square"
+      className="chess-square relative"
       style={getSquareStyles()}
       onClick={handleClick}
       onDrop={handleDrop}
@@ -103,91 +113,26 @@ const ChessSquare = ({
       } : {}}
       whileTap={interactive ? { 
         scale: 0.98,
-        transition: { duration: 0.1 }
+        transition: { duration: 0.05 }
       } : {}}
-      layout
-      transition={{ duration: animationDuration }}
+      data-square={square}
+      data-interactive={interactive}
     >
-      {/* Highlight Overlay */}
+      {/* Highlight overlay */}
       {isHighlighted && (
-        <motion.div
-          className={getHighlightStyles()}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ duration: 0.2 }}
-        />
+        <div className={getHighlightStyles()}></div>
       )}
-
-      {/* Legal Move Dot */}
-      {highlightType === 'legalMove' && (
-        <motion.div
-          className="absolute w-6 h-6 bg-green-500/60 rounded-full pointer-events-none z-20"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ 
-            scale: [0, 1.2, 1], 
-            opacity: [0, 0.8, 0.6] 
-          }}
-          transition={{ 
-            duration: 0.4,
-            times: [0, 0.6, 1],
-            ease: "easeOut"
-          }}
-        />
-      )}
-
-      {/* Capture Ring */}
-      {highlightType === 'capture' && (
-        <motion.div
-          className="absolute inset-2 border-4 border-red-500/70 rounded-full pointer-events-none z-20"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ 
-            scale: [0, 1.1, 1], 
-            opacity: [0, 0.9, 0.7] 
-          }}
-          transition={{ 
-            duration: 0.4,
-            times: [0, 0.6, 1],
-            ease: "easeOut"
-          }}
-        />
-      )}
-
-      {/* Check Warning */}
-      {highlightType === 'check' && (
-        <motion.div
-          className="absolute inset-0 bg-red-500/30 border-2 border-red-500 rounded-sm pointer-events-none z-20"
-          animate={{ 
-            opacity: [0.3, 0.7, 0.3],
-            scale: [1, 1.05, 1]
-          }}
-          transition={{ 
-            duration: 1,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-      )}
-
-      {/* Square Content (Chess Piece) */}
-      <div className="relative z-30 w-full h-full flex items-center justify-center">
+      
+      {/* Content (piece) */}
+      <div className="relative z-20 pointer-events-none">
         {children}
       </div>
-
-      {/* Square Coordinates (for debugging) */}
+      
+      {/* Debug info (development only) */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="absolute top-0 left-0 text-xs text-black/30 font-mono z-40 pointer-events-none">
+        <div className="absolute top-0 left-0 text-xs text-white/50 pointer-events-none z-30">
           {square}
         </div>
-      )}
-
-      {/* Hover Effect */}
-      {interactive && (
-        <motion.div
-          className="absolute inset-0 bg-white/10 rounded-sm opacity-0 pointer-events-none z-10"
-          whileHover={{ opacity: 1 }}
-          transition={{ duration: 0.2 }}
-        />
       )}
     </motion.div>
   );

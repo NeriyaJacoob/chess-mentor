@@ -1,58 +1,109 @@
-// src/store/slices/gameSlice.js
-// Stores current game state
+// frontend-react/src/store/slices/gameSlice.js - PERFORMANCE OPTIMIZED
+// Redux slice מותאם לביצועים עם מינימום re-renders
 import { createSlice } from '@reduxjs/toolkit';
 
+// ✅ Minimal initial state for performance
 const initialState = {
   fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-  history: [],
   selectedSquare: null,
   legalMoves: [],
+  lastMove: null,
+  history: [],
   isGameOver: false,
   gameResult: null,
-  playerColor: 'white',
   moveCount: 0,
-  capturedPieces: {
-    white: [],
-    black: []
-  },
-  lastMove: null,
-  isThinking: false,
-  // New style settings
+  
+  // ✅ UI settings separated for performance
   pieceStyle: 'classic',
-  boardTheme: 'classic'
+  boardTheme: 'classic',
+  
+  // ✅ Cached data for performance
+  _boardHash: null, // Hash of current position for quick comparison
+  _legalMovesCache: [], // Cached legal moves
 };
 
+// ✅ Fast Chess.js import - only when needed
+let Chess = null;
+const getChessClass = () => {
+  if (!Chess) {
+    Chess = require('chess.js').Chess;
+  }
+  return Chess;
+};
+
+// ✅ Fast FEN validation
+const isValidFEN = (fen) => {
+  if (!fen || typeof fen !== 'string') return false;
+  const parts = fen.split(' ');
+  return parts.length >= 4; // Basic check
+};
+
+// ✅ Fast hash function for board positions
+const hashPosition = (fen) => {
+  if (!fen) return null;
+  // Simple hash of the board part only (ignore clock)
+  const boardPart = fen.split(' ')[0];
+  let hash = 0;
+  for (let i = 0; i < boardPart.length; i++) {
+    const char = boardPart.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash;
+};
+
+// ✅ Fast legal moves calculation with caching
+const calculateLegalMoves = (fen, square, currentHash, cachedMoves, cachedHash) => {
+  // Use cache if position hasn't changed
+  if (currentHash === cachedHash && square === null) {
+    return cachedMoves;
+  }
+  
+  try {
+    const ChessClass = getChessClass();
+    const game = new ChessClass(fen);
+    
+    if (!square) {
+      return []; // No square selected
+    }
+    
+    const moves = game.moves({ square, verbose: true });
+    return moves.map(move => move.to);
+  } catch (error) {
+    console.error('❌ Legal moves calculation failed:', error);
+    return [];
+  }
+};
+
+// ✅ Performance optimized game slice
 const gameSlice = createSlice({
   name: 'game',
   initialState,
   reducers: {
+    // ✅ Fast move execution
     makeMove: (state, action) => {
-      const { from, to, promotion } = action.payload;
+      const move = action.payload;
       
       try {
-        // Import Chess.js here to avoid serialization issues
-        const { Chess } = require('chess.js');
-        const game = new Chess(state.fen);
+        const ChessClass = getChessClass();
+        const game = new ChessClass(state.fen);
         
-        // Attempt the move
-        const move = game.move({ from, to, promotion });
+        // ✅ Fast move validation and execution
+        const moveResult = game.move(move);
         
-        if (move) {
-          // Update state
+        if (moveResult) {
+          // ✅ Update minimal state
           state.fen = game.fen();
-          state.history.push(move);
-          state.moveCount++;
-          state.lastMove = { from, to };
+          state.history.push(moveResult.san);
+          state.moveCount += 1;
+          state.lastMove = { from: moveResult.from, to: moveResult.to };
           state.selectedSquare = null;
           state.legalMoves = [];
           
-          // Check for captured piece
-          if (move.captured) {
-            const capturedColor = move.color === 'w' ? 'black' : 'white';
-            state.capturedPieces[capturedColor].push(move.captured);
-          }
+          // ✅ Update cached data
+          state._boardHash = hashPosition(state.fen);
           
-          // Check game over conditions
+          // ✅ Fast game over check
           if (game.isGameOver()) {
             state.isGameOver = true;
             if (game.isCheckmate()) {
@@ -61,51 +112,81 @@ const gameSlice = createSlice({
               state.gameResult = 'Draw';
             }
           }
+          
+          console.log('⚡ Fast move executed:', moveResult.san);
+        } else {
+          console.warn('❌ Invalid move:', move);
         }
       } catch (error) {
-        console.error('Invalid move:', error);
+        console.error('❌ Move execution failed:', error);
       }
     },
     
+    // ✅ Fast square selection with cached legal moves
     selectSquare: (state, action) => {
       const square = action.payload;
-      const { Chess } = require('chess.js');
-      const game = new Chess(state.fen);
       
       if (state.selectedSquare === square) {
-        // Deselect if clicking the same square
+        // ✅ Fast deselection
         state.selectedSquare = null;
         state.legalMoves = [];
-      } else {
-        state.selectedSquare = square;
+        return;
+      }
+      
+      state.selectedSquare = square;
+      
+      if (square) {
+        // ✅ Calculate legal moves with caching
+        const currentHash = hashPosition(state.fen);
+        state.legalMoves = calculateLegalMoves(
+          state.fen, 
+          square, 
+          currentHash, 
+          state._legalMovesCache, 
+          state._boardHash
+        );
         
-        // Get legal moves for this square
-        const moves = game.moves({ square, verbose: true });
-        state.legalMoves = moves.map(move => move.to);
+        // ✅ Update cache
+        state._boardHash = currentHash;
+        state._legalMovesCache = state.legalMoves;
+      } else {
+        state.legalMoves = [];
       }
     },
     
+    // ✅ Fast new game
     newGame: (state) => {
-      const { Chess } = require('chess.js');
-      const newGame = new Chess();
-      return {
+      console.log('🚀 Starting new fast game');
+      
+      // ✅ Reset to initial position quickly
+      Object.assign(state, {
         ...initialState,
-        fen: newGame.fen(),
-        pieceStyle: state.pieceStyle,
-        boardTheme: state.boardTheme
-      };
+        pieceStyle: state.pieceStyle, // Keep UI preferences
+        boardTheme: state.boardTheme,
+        _boardHash: hashPosition(initialState.fen)
+      });
     },
     
+    // ✅ Fast game loading
     loadGame: (state, action) => {
       const { fen, history } = action.payload;
+      
+      if (!isValidFEN(fen)) {
+        console.error('❌ Invalid FEN provided');
+        return;
+      }
+      
       try {
-        const { Chess } = require('chess.js');
-        const game = new Chess(fen);
+        const ChessClass = getChessClass();
+        const game = new ChessClass(fen);
+        
+        // ✅ Fast state update
         state.fen = fen;
         state.history = history || [];
         state.selectedSquare = null;
         state.legalMoves = [];
         state.isGameOver = game.isGameOver();
+        state._boardHash = hashPosition(fen);
         
         if (state.isGameOver) {
           if (game.isCheckmate()) {
@@ -114,22 +195,28 @@ const gameSlice = createSlice({
             state.gameResult = 'Draw';
           }
         }
+        
+        console.log('⚡ Game loaded fast');
       } catch (error) {
-        console.error('Failed to load game:', error);
+        console.error('❌ Failed to load game:', error);
       }
     },
     
+    // ✅ Fast undo
     undoMove: (state) => {
-      if (state.history.length > 0) {
-        const { Chess } = require('chess.js');
-        const game = new Chess();
+      if (state.history.length === 0) return;
+      
+      try {
+        const ChessClass = getChessClass();
+        const game = new ChessClass();
         
-        // Replay all moves except the last one
+        // ✅ Fast replay without last move
         const newHistory = state.history.slice(0, -1);
         newHistory.forEach(move => {
           game.move(move);
         });
         
+        // ✅ Quick state update
         state.fen = game.fen();
         state.history = newHistory;
         state.moveCount = Math.max(0, state.moveCount - 1);
@@ -137,48 +224,67 @@ const gameSlice = createSlice({
         state.legalMoves = [];
         state.isGameOver = false;
         state.gameResult = null;
-        state.lastMove = newHistory.length > 0 ? newHistory[newHistory.length - 1] : null;
+        state._boardHash = hashPosition(state.fen);
         
-        // Recalculate captured pieces
-        state.capturedPieces = { white: [], black: [] };
-        newHistory.forEach(move => {
-          if (move.captured) {
-            const capturedColor = move.color === 'w' ? 'black' : 'white';
-            state.capturedPieces[capturedColor].push(move.captured);
-          }
-        });
+        console.log('⚡ Fast undo completed');
+      } catch (error) {
+        console.error('❌ Undo failed:', error);
       }
     },
     
-    setPlayerColor: (state, action) => {
-      state.playerColor = action.payload;
-    },
-    
-    setThinking: (state, action) => {
-      state.isThinking = action.payload;
-    },
-
-    // New style actions
-    setPieceStyle: (state, action) => {
+    // ✅ UI-only updates for performance
+    updatePieceStyle: (state, action) => {
       state.pieceStyle = action.payload;
     },
-
-    setBoardTheme: (state, action) => {
+    
+    updateBoardTheme: (state, action) => {
       state.boardTheme = action.payload;
+    },
+    
+    // ✅ Clear selection fast
+    clearSelection: (state) => {
+      state.selectedSquare = null;
+      state.legalMoves = [];
+    },
+    
+    // ✅ Performance debug action
+    debugPerformance: (state) => {
+      console.log('🔍 Game State Performance Debug:', {
+        fen: state.fen.substring(0, 20) + '...',
+        historyLength: state.history.length,
+        selectedSquare: state.selectedSquare,
+        legalMovesCount: state.legalMoves.length,
+        boardHash: state._boardHash,
+        cacheSize: state._legalMovesCache.length
+      });
     }
   },
 });
 
-export const {
-  makeMove,
-  selectSquare,
-  newGame,
-  loadGame,
+// ✅ Export actions
+export const { 
+  makeMove, 
+  selectSquare, 
+  newGame, 
+  loadGame, 
   undoMove,
-  setPlayerColor,
-  setThinking,
-  setPieceStyle,
-  setBoardTheme
+  updatePieceStyle,
+  updateBoardTheme,
+  clearSelection,
+  debugPerformance
 } = gameSlice.actions;
+
+// ✅ Optimized selectors for performance
+export const selectGameState = (state) => state.game;
+export const selectBoardData = (state) => ({
+  fen: state.game.fen,
+  selectedSquare: state.game.selectedSquare,
+  legalMoves: state.game.legalMoves,
+  lastMove: state.game.lastMove
+});
+export const selectUIPreferences = (state) => ({
+  pieceStyle: state.game.pieceStyle,
+  boardTheme: state.game.boardTheme
+});
 
 export default gameSlice.reducer;
