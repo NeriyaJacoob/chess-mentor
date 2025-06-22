@@ -12,6 +12,7 @@ import {
 // ייבוא הקומפוננטים האמיתיים במקום Mock
 import ProfessionalSidebar from '../components/Layout/ProfessionalSidebar';
 import ModernTopBar from '../components/Layout/ModernTopBar';
+import AuthButton from '../components/AuthButton';
 
 const ProfessionalLayout = () => {
   // UI State
@@ -289,6 +290,8 @@ class ErrorBoundary extends React.Component {
       );
     }
 
+// ובתוך הקומפוננטה, הוסף איפה שאתה רוצה:
+<AuthButton />
     return this.props.children;
   }
 }

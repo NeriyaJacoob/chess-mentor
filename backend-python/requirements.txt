@@ -1,23 +1,25 @@
-# Requirements for ChessMentor with MongoDB and Enhanced Analysis
+# Requirements for ChessMentor with MongoDB and Authentication
 
-# Existing requirements
+# Core FastAPI
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 websockets==12.0
 python-multipart==0.0.6
-python-chess==1.999
-python-dotenv==1.0.0
 
 # MongoDB support
 motor==3.3.2
 pymongo==4.6.0
 
-# Environment variables needed:
-# MONGODB_URL=mongodb://localhost:27017
-# STOCKFISH_PATH=/path/to/stockfish (optional)
-# OPENAI_API_KEY=your_key_here (for direct API calls if needed)
+# Authentication & Security
+pyjwt==2.8.0
+bcrypt==4.1.2
 
-# Installation notes:
-# 1. Install MongoDB locally or use MongoDB Atlas
-# 2. Make sure Stockfish is installed and accessible
-# 3. Update .env file with MongoDB connection string
+# Environment variables
+python-dotenv==1.0.0
+
+# Chess engine
+python-chess==1.999
+
+# Optional dependencies that are in your env
+# stockfish (if using stockfish engine)
+# openai (if using OpenAI API)
