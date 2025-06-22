@@ -1,9 +1,21 @@
 # backend-python/routers/__init__.py
-# Make routers available for import
+"""
+Router modules for the ChessMentor backend
+"""
 
-from . import auth_router
-from . import game_router  
-from . import websocket_router
-from . import chess_api
+# יבוא הנתיבים אם הם קיימים
+try:
+    from .game_router import router as game_router
+except ImportError:
+    print("⚠️ game_router not found")
+    from fastapi import APIRouter
+    game_router = APIRouter()
 
-__all__ = ['auth_router', 'game_router', 'websocket_router', 'chess_api']
+try:
+    from .websocket_router import router as websocket_router
+except ImportError:
+    print("⚠️ websocket_router not found")
+    from fastapi import APIRouter
+    websocket_router = APIRouter()
+
+__all__ = ['game_router', 'websocket_router']

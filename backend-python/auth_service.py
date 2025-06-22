@@ -1,6 +1,6 @@
-# backend/auth_service.py
+# backend-python/auth_service.py
 """
-שירות Authentication מקיף עם MongoDB אמיתי
+שירות Authentication מקיף עם MongoDB אמיתי - מתוקן
 """
 
 import jwt
@@ -18,7 +18,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
 
 # הגדרות JWT
-JWT_SECRET = "your-secret-key-here"  # החלף במפתח אמיתי
+JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-here')
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -37,8 +37,8 @@ class MongoDBService:
     async def connect(self):
         """התחברות ל-MongoDB"""
         try:
-            # קריאת ה-URI מה-ENV (שם המשתנה הנכון)
-            mongodb_url = os.getenv('MONGO_URI') or os.getenv('MONGODB_URL', 'mongodb://localhost:27017')
+            # תיקון: שימוש ב-MONGO_URI במקום MONGODB_URL
+            mongodb_url = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
             print(f"🔗 Attempting MongoDB connection to: {mongodb_url[:50]}...")
             
             self.client = AsyncIOMotorClient(mongodb_url)
@@ -77,6 +77,7 @@ class MongoDBService:
             # Index על sessions
             await self.sessions_collection.create_index("user_id")
             await self.sessions_collection.create_index("session_id", unique=True)
+            await self.sessions_collection.create_index("created_at", expireAfterSeconds=86400)  # 24 שעות
             
             # Index על games
             await self.games_collection.create_index("user_id")
@@ -110,75 +111,62 @@ class MongoDBService:
                 'username': username,
                 'email': email,
                 'password_hash': password_hash,
-                'created_at': datetime.utcnow().isoformat(),
-                'last_active': datetime.utcnow().isoformat(),
+                'created_at': datetime.utcnow(),
+                'last_active': datetime.utcnow(),
                 'is_active': True,
-                'role': 'user',
                 'profile': {
                     'display_name': username,
-                    'avatar_url': None,
-                    'bio': None
-                },
-                'preferences': {
-                    'theme': 'light',
-                    'language': 'he',
-                    'notifications': True
-                },
-                'stats': {
+                    'rating': 1200,
                     'games_played': 0,
                     'games_won': 0,
                     'games_lost': 0,
-                    'games_drawn': 0,
-                    'elo_rating': 1200
+                    'games_drawn': 0
                 }
             }
             
-            # שמירה ב-DB
             result = await self.users_collection.insert_one(user_doc)
+            print(f"✅ User created: {username} ({user_id})")
             
-            # החזרת המשתמש ללא סיסמה
-            user_doc['_id'] = str(result.inserted_id)
-            del user_doc['password_hash']
+            return {
+                'user_id': user_id,
+                'username': username,
+                'email': email,
+                'profile': user_doc['profile']
+            }
             
-            print(f"👤 Created user: {username}")
-            return user_doc
-            
-        except DuplicateKeyError:
-            raise HTTPException(status_code=400, detail="Username or email already exists")
         except HTTPException:
             raise
         except Exception as e:
-            print(f"Error creating user: {e}")
+            print(f"❌ Create user error: {e}")
             raise HTTPException(status_code=500, detail="Failed to create user")
     
     async def get_user_by_username(self, username: str) -> Optional[dict]:
         """חיפוש משתמש לפי שם משתמש"""
         try:
             user = await self.users_collection.find_one({"username": username})
-            if user:
-                user['_id'] = str(user['_id'])
             return user
         except Exception as e:
-            print(f"Error getting user by username: {e}")
+            print(f"❌ Get user error: {e}")
             return None
     
     async def get_user_by_id(self, user_id: str) -> Optional[dict]:
         """חיפוש משתמש לפי ID"""
         try:
             user = await self.users_collection.find_one({"user_id": user_id})
-            if user:
-                user['_id'] = str(user['_id'])
             return user
         except Exception as e:
-            print(f"Error getting user by ID: {e}")
+            print(f"❌ Get user by ID error: {e}")
             return None
     
-    def verify_password(self, user: dict, password: str) -> bool:
-        """אימות סיסמה"""
+    async def update_last_active(self, user_id: str):
+        """עדכון זמן פעילות אחרונה"""
         try:
-            return bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8'))
-        except Exception:
-            return False
+            await self.users_collection.update_one(
+                {"user_id": user_id},
+                {"$set": {"last_active": datetime.utcnow()}}
+            )
+        except Exception as e:
+            print(f"❌ Update last active error: {e}")
     
     async def create_session(self, user_id: str, device_info: dict = None) -> str:
         """יצירת session חדש"""
@@ -187,74 +175,34 @@ class MongoDBService:
             session_doc = {
                 'session_id': session_id,
                 'user_id': user_id,
-                'created_at': datetime.utcnow().isoformat(),
-                'last_activity': datetime.utcnow().isoformat(),
+                'created_at': datetime.utcnow(),
+                'last_used': datetime.utcnow(),
                 'device_info': device_info or {},
                 'is_active': True
             }
             
             await self.sessions_collection.insert_one(session_doc)
-            print(f"🔐 Created session for user: {user_id}")
             return session_id
             
         except Exception as e:
-            print(f"Error creating session: {e}")
+            print(f"❌ Create session error: {e}")
             raise HTTPException(status_code=500, detail="Failed to create session")
     
-    async def get_session(self, session_id: str) -> Optional[dict]:
-        """קבלת session"""
+    async def get_stats(self):
+        """סטטיסטיקות של המסד נתונים"""
         try:
-            session = await self.sessions_collection.find_one({"session_id": session_id})
-            if session:
-                session['_id'] = str(session['_id'])
-            return session
-        except Exception as e:
-            print(f"Error getting session: {e}")
-            return None
-    
-    async def update_session_activity(self, session_id: str):
-        """עדכון פעילות session"""
-        try:
-            await self.sessions_collection.update_one(
-                {"session_id": session_id},
-                {"$set": {"last_activity": datetime.utcnow().isoformat()}}
-            )
-        except Exception as e:
-            print(f"Error updating session activity: {e}")
-    
-    async def invalidate_session(self, session_id: str):
-        """ביטול session"""
-        try:
-            await self.sessions_collection.update_one(
-                {"session_id": session_id},
-                {"$set": {"is_active": False}}
-            )
-        except Exception as e:
-            print(f"Error invalidating session: {e}")
-    
-    async def save_game(self, user_id: str, game_data: dict) -> str:
-        """שמירת משחק"""
-        try:
-            game_doc = {
-                'user_id': user_id,
-                'game_id': game_data.get('game_id', str(uuid.uuid4())),
-                'created_at': datetime.utcnow().isoformat(),
-                'moves': game_data.get('moves', []),
-                'positions': game_data.get('positions', []),
-                'result': game_data.get('result', 'ongoing'),
-                'ai_level': game_data.get('ai_level', 5),
-                'player_color': game_data.get('player_color', 'white'),
-                'game_duration': game_data.get('duration', 0),
-                'analysis': None
+            users_count = await self.users_collection.count_documents({})
+            active_sessions = await self.sessions_collection.count_documents({"is_active": True})
+            total_games = await self.games_collection.count_documents({})
+            
+            return {
+                'users': users_count,
+                'active_sessions': active_sessions,
+                'total_games': total_games
             }
-            
-            result = await self.games_collection.insert_one(game_doc)
-            print(f"💾 Saved game for user: {user_id}")
-            return str(result.inserted_id)
-            
         except Exception as e:
-            print(f"Error saving game: {e}")
-            return ""
+            print(f"❌ Get stats error: {e}")
+            return {'users': 0, 'active_sessions': 0, 'total_games': 0}
     
     async def get_user_games(self, user_id: str, limit: int = 20) -> List[dict]:
         """קבלת משחקי המשתמש"""
@@ -269,32 +217,15 @@ class MongoDBService:
                 games.append(game)
             
             return games
-            
         except Exception as e:
-            print(f"Error getting user games: {e}")
+            print(f"❌ Get user games error: {e}")
             return []
-    
-    async def get_stats(self) -> dict:
-        """סטטיסטיקות כלליות"""
-        try:
-            total_users = await self.users_collection.count_documents({})
-            total_games = await self.games_collection.count_documents({})
-            active_sessions = await self.sessions_collection.count_documents({"is_active": True})
-            
-            return {
-                "total_users": total_users,
-                "total_games": total_games,
-                "active_sessions": active_sessions
-            }
-        except Exception as e:
-            print(f"Error getting stats: {e}")
-            return {"total_users": 0, "total_games": 0, "active_sessions": 0}
 
-# יצירת אובייקט הדאטהבייס הגלובלי
+# יצירת instance גלובלי
 db = MongoDBService()
 
 class AuthService:
-    """שירות Authentication"""
+    """שירות אימות משתמשים"""
     
     @staticmethod
     def create_jwt_token(user_id: str, username: str) -> str:
@@ -308,97 +239,98 @@ class AuthService:
         return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
     
     @staticmethod
-    def create_refresh_token(user_id: str) -> str:
-        """יצירת refresh token"""
-        token = str(uuid.uuid4())
-        # כאן תוכל לשמור ב-DB אם רוצה
-        return token
-    
-    @staticmethod
     def verify_jwt_token(token: str) -> dict:
         """אימות JWT token"""
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             return payload
         except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=401, detail="Token expired")
-        except jwt.InvalidTokenError:
+            raise HTTPException(status_code=401, detail="Token has expired")
+        except jwt.JWTError:
             raise HTTPException(status_code=401, detail="Invalid token")
     
     @staticmethod
     async def register_user(username: str, password: str, email: str = None) -> dict:
         """רישום משתמש חדש"""
-        if len(password) < 3:
-            raise HTTPException(status_code=400, detail="Password must be at least 3 characters")
+        # בדיקת תקינות
+        if len(username) < 3:
+            raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
         
+        if len(password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        
+        # יצירת משתמש
         user = await db.create_user(username, password, email)
+        
+        # יצירת session
         session_id = await db.create_session(user['user_id'])
-        jwt_token = AuthService.create_jwt_token(user['user_id'], username)
-        refresh_token = AuthService.create_refresh_token(user['user_id'])
+        
+        # יצירת tokens
+        access_token = AuthService.create_jwt_token(user['user_id'], username)
+        refresh_token = str(uuid.uuid4())  # TODO: implement proper refresh token
         
         return {
-            'user': {k: v for k, v in user.items() if k != 'password_hash'},
-            'session_id': session_id,
-            'access_token': jwt_token,
+            'user': user,
+            'access_token': access_token,
             'refresh_token': refresh_token,
-            'token_type': 'bearer'
+            'session_id': session_id
         }
     
     @staticmethod
     async def login_user(username: str, password: str, device_info: dict = None) -> dict:
         """התחברות משתמש"""
+        # חיפוש משתמש
         user = await db.get_user_by_username(username)
         if not user:
-            # אם המשתמש לא קיים, צור אותו (למטרות פיתוח)
-            print(f"⚠️ User {username} not found, creating new user")
-            return await AuthService.register_user(username, password)
+            raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        if not db.verify_password(user, password):
-            # במצב פיתוח, נעדכן את הסיסמה
-            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            await db.users_collection.update_one(
-                {"user_id": user['user_id']},
-                {"$set": {"password_hash": password_hash}}
-            )
-            print(f"🔄 Updated password for {username}")
+        # בדיקת סיסמה
+        if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        if not user.get('is_active', True):
-            raise HTTPException(status_code=401, detail="Account is disabled")
+        # עדכון last_active
+        await db.update_last_active(user['user_id'])
         
+        # יצירת session
         session_id = await db.create_session(user['user_id'], device_info)
-        jwt_token = AuthService.create_jwt_token(user['user_id'], username)
-        refresh_token = AuthService.create_refresh_token(user['user_id'])
         
-        # עדכון זמן פעילות אחרון
-        await db.users_collection.update_one(
-            {"user_id": user['user_id']},
-            {"$set": {"last_active": datetime.utcnow().isoformat()}}
-        )
+        # יצירת tokens
+        access_token = AuthService.create_jwt_token(user['user_id'], username)
+        refresh_token = str(uuid.uuid4())  # TODO: implement proper refresh token
+        
+        # הכנת תגובה
+        user_data = {k: v for k, v in user.items() if k != 'password_hash'}
         
         return {
-            'user': {k: v for k, v in user.items() if k != 'password_hash'},
-            'session_id': session_id,
-            'access_token': jwt_token,
+            'user': user_data,
+            'access_token': access_token,
             'refresh_token': refresh_token,
-            'token_type': 'bearer'
+            'session_id': session_id
         }
 
-# Dependency לאימות JWT
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """קבלת המשתמש הנוכחי מה-JWT token"""
+# Dependency לקבלת משתמש מאומת
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """קבלת משתמש נוכחי מה-token"""
+    token = credentials.credentials
+    
     try:
-        payload = AuthService.verify_jwt_token(credentials.credentials)
+        payload = AuthService.verify_jwt_token(token)
         user = await db.get_user_by_id(payload['user_id'])
+        
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        return user
+        
+        return {k: v for k, v in user.items() if k != 'password_hash'}
+        
     except HTTPException:
         raise
-    except Exception:
-        raise HTTPException(status_code=401, detail="Authentication failed")
+    except Exception as e:
+        print(f"❌ Get current user error: {e}")
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
 
+# WebSocket Manager
 class WebSocketManager:
-    """מנהל חיבורי WebSocket עם authentication"""
+    """מנהל חיבורי WebSocket"""
     
     def __init__(self):
         self.active_connections: Dict[str, dict] = {}
@@ -409,60 +341,52 @@ class WebSocketManager:
         """חיבור WebSocket חדש"""
         await websocket.accept()
         
-        connection_data = {
+        self.active_connections[connection_id] = {
             'websocket': websocket,
             'user_id': user_id,
-            'connected_at': time.time(),
-            'last_activity': time.time(),
-            'rooms': set(),
-            'metadata': {}
+            'connected_at': datetime.utcnow(),
+            'rooms': set()
         }
-        
-        self.active_connections[connection_id] = connection_data
         
         if user_id:
             if user_id not in self.user_connections:
                 self.user_connections[user_id] = []
             self.user_connections[user_id].append(connection_id)
         
-        print(f"🔗 WebSocket connected: {connection_id} (User: {user_id or 'Anonymous'})")
+        print(f"✅ WebSocket connected: {connection_id} (User: {user_id or 'Anonymous'})")
     
     def disconnect(self, connection_id: str):
         """ניתוק WebSocket"""
         if connection_id in self.active_connections:
-            connection_data = self.active_connections[connection_id]
-            user_id = connection_data['user_id']
+            conn_info = self.active_connections[connection_id]
+            user_id = conn_info['user_id']
             
-            # יצירת עותק של הrooms כדי למנוע את השגיאה
-            rooms_to_leave = list(connection_data['rooms'])
-            for room_id in rooms_to_leave:
+            # הסרה מחדרים
+            for room_id in conn_info['rooms']:
                 self.leave_room(connection_id, room_id)
             
+            # הסרה מרשימת משתמש
             if user_id and user_id in self.user_connections:
-                self.user_connections[user_id] = [
-                    conn_id for conn_id in self.user_connections[user_id] 
-                    if conn_id != connection_id
-                ]
+                self.user_connections[user_id].remove(connection_id)
                 if not self.user_connections[user_id]:
                     del self.user_connections[user_id]
             
+            # הסרת החיבור
             del self.active_connections[connection_id]
-            print(f"🔌 WebSocket disconnected: {connection_id}")
+            
+            print(f"❌ WebSocket disconnected: {connection_id}")
     
     async def send_to_connection(self, connection_id: str, message: dict) -> bool:
         """שליחת הודעה לחיבור ספציפי"""
-        if connection_id not in self.active_connections:
-            return False
-        
-        try:
-            websocket = self.active_connections[connection_id]['websocket']
-            await websocket.send_text(json.dumps(message))
-            self.active_connections[connection_id]['last_activity'] = time.time()
-            return True
-        except Exception as e:
-            print(f"❌ Failed to send message to {connection_id}: {e}")
-            self.disconnect(connection_id)
-            return False
+        if connection_id in self.active_connections:
+            try:
+                websocket = self.active_connections[connection_id]['websocket']
+                await websocket.send_json(message)
+                return True
+            except Exception as e:
+                print(f"❌ Failed to send to {connection_id}: {e}")
+                self.disconnect(connection_id)
+        return False
     
     async def send_to_user(self, user_id: str, message: dict) -> int:
         """שליחת הודעה לכל החיבורים של משתמש"""
@@ -476,7 +400,16 @@ class WebSocketManager:
         
         return sent_count
     
-    def join_room(self, connection_id: str, room_id: str):
+    async def broadcast(self, message: dict, exclude_connection: str = None) -> int:
+        """שידור הודעה לכל החיבורים"""
+        sent_count = 0
+        for connection_id in list(self.active_connections.keys()):
+            if connection_id != exclude_connection:
+                if await self.send_to_connection(connection_id, message):
+                    sent_count += 1
+        return sent_count
+    
+    def join_room(self, connection_id: str, room_id: str) -> bool:
         """הצטרפות לחדר"""
         if connection_id not in self.active_connections:
             return False
@@ -486,7 +419,8 @@ class WebSocketManager:
         
         if connection_id not in self.rooms[room_id]:
             self.rooms[room_id].append(connection_id)
-            self.active_connections[connection_id]['rooms'].add(room_id)
+        
+        self.active_connections[connection_id]['rooms'].add(room_id)
         
         return True
     
@@ -535,7 +469,7 @@ async def authenticate_websocket(websocket: WebSocket, token: str = None) -> Opt
         return None
     
     try:
-        print(f"🔐 Authenticating WebSocket with token: {token[:50]}...")
+        print(f"🔐 Authenticating WebSocket with token: {token[:20]}...")
         payload = AuthService.verify_jwt_token(token)
         print(f"✅ Token valid for user: {payload['user_id']}")
         
@@ -545,10 +479,6 @@ async def authenticate_websocket(websocket: WebSocket, token: str = None) -> Opt
             return user
         else:
             print(f"❌ User not found: {payload['user_id']}")
-            
-            # במקרה של user לא נמצא, פשוט נמשיך כ-Anonymous
-            # במקום לנסות ליצור משתמש חדש שעלול לכשל
-            print("⚠️ Continuing as Anonymous user")
             return None
             
     except Exception as e:

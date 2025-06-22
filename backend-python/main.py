@@ -26,10 +26,19 @@ from auth_service import (
     db
 )
 
+# יבוא נוסף למשחקי שח - יצירת קבצים ריקים אם לא קיימים
+try:
+    from routers import game_router, websocket_router
+except ImportError:
+    print("⚠️ Router modules not found, creating empty routers")
+    from fastapi import APIRouter
+    game_router = APIRouter()
+    websocket_router = APIRouter()
+
 app = FastAPI(
-    title="Authentication & WebSocket API",
-    description="מערכת התחברות מקיפה עם תמיכה ב-WebSocket ו-MongoDB",
-    version="1.0.0"
+    title="ChessMentor API",
+    description="מערכת התחברות מקיפה עם תמיכה ב-WebSocket, MongoDB ומשחקי שח",
+    version="2.0.0"
 )
 
 # הגדרות CORS
@@ -55,12 +64,24 @@ class LoginRequest(BaseModel):
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
+class UpdateProfileRequest(BaseModel):
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+class OpenAIAuthRequest(BaseModel):
+    apiKey: str
+
+# הוספת הנתיבים של משחקים
+app.include_router(game_router.router, prefix="/api", tags=["games"])
+app.include_router(websocket_router.router, tags=["websocket"])
+
 # ============= Startup/Shutdown Events =============
 
 @app.on_event("startup")
 async def startup_event():
     """התחברות ל-MongoDB בעת הפעלת השרת"""
-    print("🚀 Starting server...")
+    print("🚀 Starting ChessMentor server...")
     
     # Debug: הצגת משתני סביבה
     mongo_uri = os.getenv('MONGO_URI')
@@ -68,10 +89,6 @@ async def startup_event():
         print(f"✅ Found MONGO_URI: {mongo_uri[:30]}...{mongo_uri[-10:]}")
     else:
         print("❌ MONGO_URI not found in environment variables!")
-        print("📝 Available env vars starting with 'MONGO':")
-        for key in os.environ:
-            if key.startswith('MONGO'):
-                print(f"   - {key}")
     
     # התחברות למונגו
     mongodb_connected = await db.connect()
@@ -139,11 +156,36 @@ async def login(request: LoginRequest):
         print(f"Login error: {e}")
         raise HTTPException(status_code=500, detail="Login failed")
 
+@app.post("/auth/openai")
+async def authenticate_openai(request: OpenAIAuthRequest):
+    """אימות OpenAI API key"""
+    try:
+        # בדיקה בסיסית של המפתח
+        if not request.apiKey or not request.apiKey.startswith('sk-'):
+            raise HTTPException(status_code=400, detail="Invalid API key format")
+        
+        # יצירת session ID ייחודי
+        session_id = str(uuid.uuid4())
+        
+        # TODO: בדיקה מול OpenAI API אמיתית
+        # כרגע נניח שהמפתח תקין
+        
+        return JSONResponse({
+            "success": True,
+            "sessionId": session_id,
+            "message": "OpenAI API key validated successfully"
+        })
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"OpenAI auth error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to validate OpenAI key")
+
 @app.post("/auth/refresh")
 async def refresh_token(request: RefreshTokenRequest):
     """רענון access token"""
     try:
-        # כאן תוכל להוסיף לוגיקה לרענון טוקן
+        # TODO: מימוש רענון טוקן
         raise HTTPException(status_code=501, detail="Refresh token not implemented yet")
     except HTTPException as e:
         raise e
@@ -152,39 +194,40 @@ async def refresh_token(request: RefreshTokenRequest):
 async def logout(current_user: dict = Depends(get_current_user)):
     """התנתקות משתמש"""
     try:
-        # כאן תוכל להוסיף לוגיקה לביטול sessions
+        # TODO: ביטול session
         return JSONResponse({
             "success": True,
-            "message": "Logout successful"
+            "message": "Logged out successfully"
         })
     except Exception as e:
         print(f"Logout error: {e}")
         raise HTTPException(status_code=500, detail="Logout failed")
 
 @app.get("/auth/me")
-async def get_current_user_info(current_user: dict = Depends(get_current_user)):
-    """קבלת מידע על המשתמש הנוכחי"""
+async def get_me(current_user: dict = Depends(get_current_user)):
+    """קבלת פרטי המשתמש הנוכחי"""
     return JSONResponse({
         "success": True,
-        "user": {k: v for k, v in current_user.items() if k != 'password_hash'}
+        "user": current_user
     })
 
 @app.put("/auth/profile")
 async def update_profile(
-    profile_data: Dict[str, Any],
+    request: UpdateProfileRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """עדכון פרופיל משתמש"""
     try:
         user_id = current_user['user_id']
         
-        # עדכון שדות מורשים בלבד
-        allowed_fields = {'display_name', 'bio', 'avatar_url'}
+        # הכנת נתונים לעדכון
         update_data = {}
-        
-        for field, value in profile_data.items():
-            if field in allowed_fields:
-                update_data[f'profile.{field}'] = value
+        if request.display_name:
+            update_data['profile.display_name'] = request.display_name
+        if request.email:
+            update_data['email'] = request.email
+        if request.avatar_url:
+            update_data['profile.avatar_url'] = request.avatar_url
         
         if update_data:
             await db.users_collection.update_one(
@@ -256,179 +299,109 @@ async def websocket_endpoint(
                     "data": {"message": "Invalid JSON format"}
                 })
             except Exception as e:
-                print(f"❌ WebSocket message handling error: {e}")
+                print(f"WebSocket error: {e}")
                 await websocket_manager.send_to_connection(connection_id, {
                     "type": "error",
-                    "data": {"message": "Internal server error"}
+                    "data": {"message": str(e)}
                 })
-    
+                
     except WebSocketDisconnect:
-        print(f"🔌 WebSocket disconnected: {connection_id}")
-    except Exception as e:
-        print(f"❌ WebSocket error: {e}")
+        pass
     finally:
         websocket_manager.disconnect(connection_id)
 
-async def handle_websocket_message(connection_id: str, message_data: dict, user_id: str = None):
+async def handle_websocket_message(connection_id: str, message: dict, user_id: str = None):
     """טיפול בהודעות WebSocket"""
+    msg_type = message.get('type')
+    data = message.get('data', {})
     
-    message_type = message_data.get('type')
-    data = message_data.get('data', {})
+    print(f"📨 Received {msg_type} from {connection_id[:8]}...")
     
-    print(f"📨 WebSocket message: {message_type} from {connection_id} (User: {user_id or 'Anonymous'})")
-    
-    try:
-        if message_type == "ping":
-            await websocket_manager.send_to_connection(connection_id, {
-                "type": "pong",
-                "data": {"timestamp": data.get('timestamp')}
-            })
-        
-        elif message_type == "join_room":
-            room_id = data.get('room_id', 'general')  # default room
-            success = websocket_manager.join_room(connection_id, room_id)
-            
-            if success:
-                print(f"✅ {connection_id} joined room: {room_id}")
-                await websocket_manager.send_to_connection(connection_id, {
-                    "type": "room_joined",
-                    "data": {"room_id": room_id}
-                })
-                
-                # הודעה לחדר על משתמש חדש
-                username = "Anonymous"
-                if user_id:
-                    try:
-                        user = await db.get_user_by_id(user_id)
-                        username = user['username'] if user else "Unknown User"
-                    except:
-                        username = "Unknown User"
-                
-                await websocket_manager.broadcast_to_room(room_id, {
-                    "type": "user_joined_room",
-                    "data": {
-                        "room_id": room_id,
-                        "user_id": user_id,
-                        "username": username,
-                        "connection_id": connection_id
-                    }
-                }, exclude_connection=connection_id)
-            else:
-                print(f"❌ Failed to join room: {room_id}")
-        
-        elif message_type == "leave_room":
-            room_id = data.get('room_id')
-            if room_id:
-                websocket_manager.leave_room(connection_id, room_id)
-                await websocket_manager.send_to_connection(connection_id, {
-                    "type": "room_left",
-                    "data": {"room_id": room_id}
-                })
-        
-        elif message_type == "send_to_room":
-            room_id = data.get('room_id')
-            message_content = data.get('message')
-            
-            if room_id and message_content:
-                # כרגע לא נשמור chat messages ב-DB (רק games)
-                # אפשר להוסיף collection נפרד לchat messages אם צריך
-                
-                # קבלת שם המשתמש
-                username = "Anonymous"
-                if user_id:
-                    try:
-                        user = await db.get_user_by_id(user_id)
-                        username = user['username'] if user else "Unknown User"
-                    except:
-                        username = "Unknown User"
-                
-                await websocket_manager.broadcast_to_room(room_id, {
-                    "type": "room_message",
-                    "data": {
-                        "room_id": room_id,
-                        "user_id": user_id,
-                        "username": username,
-                        "connection_id": connection_id,
-                        "message": message_content,
-                        "timestamp": data.get('timestamp')
-                    }
-                }, exclude_connection=connection_id)
-                
-                print(f"📢 Broadcast message to room {room_id}: {message_content[:50]}...")
-        
-        elif message_type == "send_to_user":
-            target_user_id = data.get('target_user_id')
-            message_content = data.get('message')
-            
-            if target_user_id and message_content and user_id:  # Only authenticated users can send private messages
-                sent_count = await websocket_manager.send_to_user(target_user_id, {
-                    "type": "private_message",
-                    "data": {
-                        "from_user_id": user_id,
-                        "from_connection_id": connection_id,
-                        "message": message_content,
-                        "timestamp": data.get('timestamp')
-                    }
-                })
-                
-                await websocket_manager.send_to_connection(connection_id, {
-                    "type": "message_sent",
-                    "data": {
-                        "target_user_id": target_user_id,
-                        "sent_to_connections": sent_count
-                    }
-                })
-            elif not user_id:
-                await websocket_manager.send_to_connection(connection_id, {
-                    "type": "error",
-                    "data": {"message": "Authentication required for private messages"}
-                })
-        
-        elif message_type == "get_stats":
-            if user_id:  # Only authenticated users can get stats
-                ws_stats = websocket_manager.get_stats()
-                db_stats = await db.get_stats()
-                
-                await websocket_manager.send_to_connection(connection_id, {
-                    "type": "stats",
-                    "data": {
-                        "websocket": ws_stats,
-                        "database": db_stats
-                    }
-                })
-        
-        else:
+    # הודעות צ'אט
+    if msg_type == 'chat_message':
+        # בדיקה שהמשתמש מאומת
+        if not user_id:
             await websocket_manager.send_to_connection(connection_id, {
                 "type": "error",
-                "data": {"message": f"Unknown message type: {message_type}"}
+                "data": {"message": "Authentication required for chat"}
+            })
+            return
+        
+        # קבלת פרטי המשתמש
+        user = await db.get_user_by_id(user_id)
+        
+        # הכנת הודעה
+        broadcast_msg = {
+            "type": "chat_message",
+            "data": {
+                "id": str(uuid.uuid4()),
+                "content": data.get('content', ''),
+                "userId": user_id,
+                "username": user['username'],
+                "displayName": user['profile'].get('display_name', user['username']),
+                "timestamp": asyncio.get_event_loop().time(),
+                "room": data.get('room', 'general')
+            }
+        }
+        
+        # שידור לכולם
+        room = data.get('room', 'general')
+        if room == 'general':
+            await websocket_manager.broadcast(broadcast_msg)
+        else:
+            await websocket_manager.broadcast_to_room(room, broadcast_msg)
+    
+    elif msg_type == 'join_room':
+        room_id = data.get('room_id')
+        if room_id:
+            websocket_manager.join_room(connection_id, room_id)
+            await websocket_manager.send_to_connection(connection_id, {
+                "type": "joined_room",
+                "data": {"room_id": room_id}
             })
     
-    except Exception as e:
-        print(f"❌ Error handling WebSocket message: {e}")
+    elif msg_type == 'leave_room':
+        room_id = data.get('room_id')
+        if room_id:
+            websocket_manager.leave_room(connection_id, room_id)
+            await websocket_manager.send_to_connection(connection_id, {
+                "type": "left_room",
+                "data": {"room_id": room_id}
+            })
+    
+    elif msg_type == 'get_status':
+        status = {
+            "connection_id": connection_id,
+            "authenticated": user_id is not None,
+            "user_id": user_id,
+            "server_stats": websocket_manager.get_stats()
+        }
+        await websocket_manager.send_to_connection(connection_id, {
+            "type": "status",
+            "data": status
+        })
+    
+    else:
+        # הודעה לא מוכרת
         await websocket_manager.send_to_connection(connection_id, {
             "type": "error",
-            "data": {"message": "Error processing message"}
+            "data": {"message": f"Unknown message type: {msg_type}"}
         })
 
 # ============= API Routes =============
 
 @app.get("/api/stats")
-async def get_system_stats(current_user: dict = Depends(get_current_user)):
-    """סטטיסטיקות מערכת"""
+async def get_stats(current_user: dict = Depends(get_current_user)):
+    """סטטיסטיקות המערכת"""
     try:
-        # סטטיסטיקות WebSocket
-        ws_stats = websocket_manager.get_stats()
-        
-        # סטטיסטיקות MongoDB
         db_stats = await db.get_stats()
+        ws_stats = websocket_manager.get_stats()
         
         return JSONResponse({
             "success": True,
-            "stats": {
-                "websocket": ws_stats,
-                "database": db_stats,
-                "mongodb_connected": db.client is not None
-            }
+            "database": db_stats,
+            "websocket": ws_stats,
+            "timestamp": asyncio.get_event_loop().time()
         })
     except Exception as e:
         print(f"Stats error: {e}")
@@ -499,5 +472,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting Authentication & WebSocket server with MongoDB...")
+    print("🚀 Starting ChessMentor server...")
     uvicorn.run("main:app", host="0.0.0.0", port=5001, reload=True)

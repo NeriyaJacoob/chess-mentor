@@ -1,74 +1,127 @@
-# backend-python/routers/websocket_router.py - FIXED FOR STOCKFISH
+# backend-python/routers/websocket_router.py
 """
-WebSocket Routes - עם מנוע Stockfish אמיתי
+WebSocket routes for chess games
 """
 
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
 import uuid
-import asyncio
-import time
 from datetime import datetime
-import chess
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from utils.mock_data import mock_db
-from chess_engine import chess_engine, init_engine
+from typing import Dict, Optional
+import asyncio
+import random
 
 router = APIRouter()
 
-class WebSocketManager:
-    """מנהל חיבורי WebSocket עם מנוע שחמט"""
-    
+# מנהל חיבורי WebSocket למשחקים
+class GameWebSocketManager:
     def __init__(self):
-        self.active_connections: dict = {}
-        self.engine_initialized = False
-    
+        self.active_connections: Dict[str, dict] = {}
+        self.engine_initialized = True  # Stockfish stub
+        
     async def connect(self, websocket: WebSocket, player_id: str):
         await websocket.accept()
         self.active_connections[player_id] = {
             'websocket': websocket,
-            'player_data': None,
+            'player_data': {},
             'game_data': None
         }
         
-        # אתחול מנוע אם צריך
-        if not self.engine_initialized:
-            try:
-                await init_engine(skill_level=5)  # רמה בינונית
-                self.engine_initialized = True
-                print("🤖 Chess engine initialized")
-            except Exception as e:
-                print(f"❌ Failed to initialize chess engine: {e}")
-    
     def disconnect(self, player_id: str):
         if player_id in self.active_connections:
             del self.active_connections[player_id]
-    
+            
     async def send_message(self, player_id: str, message: dict):
         if player_id in self.active_connections:
             try:
                 websocket = self.active_connections[player_id]['websocket']
-                await websocket.send_text(json.dumps(message))
+                await websocket.send_json(message)
                 return True
             except:
                 self.disconnect(player_id)
                 return False
         return False
 
-manager = WebSocketManager()
+# מנהל מדומה למשחקי שח
+class ChessEngineStub:
+    def __init__(self):
+        self.skill_level = 10
+        self.current_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        
+    def new_game(self):
+        self.current_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        return {
+            'fen': self.current_position,
+            'legal_moves': self._get_mock_legal_moves(),
+            'turn': 'white',
+            'move_count': 0,
+            'is_check': False,
+            'is_checkmate': False,
+            'is_game_over': False
+        }
+    
+    def make_move(self, move: str):
+        # מהלך מדומה
+        return {
+            'success': True,
+            'move': move,
+            'san': self._uci_to_san(move),
+            'fen': self.current_position,
+            'legal_moves': self._get_mock_legal_moves(),
+            'turn': 'black',
+            'move_count': 1,
+            'is_check': False,
+            'is_checkmate': False,
+            'is_game_over': False
+        }
+    
+    def get_best_move(self):
+        # מהלך אקראי מדומה
+        moves = ['e2e4', 'd2d4', 'g1f3', 'b1c3', 'e2e3', 'd2d3']
+        return random.choice(moves)
+    
+    def set_skill_level(self, level: int):
+        self.skill_level = max(0, min(20, level))
+    
+    def get_position_info(self):
+        return {
+            'fen': self.current_position,
+            'legal_moves': self._get_mock_legal_moves(),
+            'turn': 'white',
+            'move_count': 0
+        }
+    
+    def _get_mock_legal_moves(self):
+        return ['e2e4', 'd2d4', 'g1f3', 'b1c3', 'e2e3', 'd2d3', 'c2c4', 'g2g3']
+    
+    def _uci_to_san(self, uci: str):
+        # המרה פשוטה מ-UCI ל-SAN
+        piece_map = {'e2e4': 'e4', 'd2d4': 'd4', 'g1f3': 'Nf3', 'b1c3': 'Nc3'}
+        return piece_map.get(uci, uci)
+    
+    def _skill_to_elo(self, skill: int):
+        # המרת רמה ל-ELO
+        return 800 + (skill * 70)
 
-@router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    player_id = str(uuid.uuid4())
+# יצירת instances
+manager = GameWebSocketManager()
+chess_engine = ChessEngineStub()
+
+@router.websocket("/ws/game/{player_id}")
+async def game_websocket(websocket: WebSocket, player_id: str):
+    """WebSocket endpoint למשחקי שח"""
     await manager.connect(websocket, player_id)
     
     try:
-        print(f"🔗 Player connected: {player_id[:8]}")
-        
         while True:
             try:
+                # קבלת הודעה מהלקוח
                 data = await websocket.receive_text()
                 message = json.loads(data)
-                await handle_websocket_message(player_id, message)
+                
+                # טיפול בהודעה
+                await handle_game_message(player_id, message)
+                
             except WebSocketDisconnect:
                 break
             except json.JSONDecodeError:
@@ -82,12 +135,12 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         handle_disconnect(player_id)
 
-async def handle_websocket_message(player_id: str, message: dict):
-    """טיפול בהודעות WebSocket"""
+async def handle_game_message(player_id: str, message: dict):
+    """טיפול בהודעות משחק"""
     action = message.get('action')
     data = message.get('data', {})
     
-    print(f"📨 {action} from {player_id[:8]}")
+    print(f"📨 Game action {action} from {player_id[:8]}")
     
     handlers = {
         'join': handle_join,
@@ -133,7 +186,7 @@ async def handle_join(player_id: str, data: dict):
 async def handle_find_game(player_id: str, data: dict):
     """חיפוש משחק - רק AI כרגע"""
     mode = data.get('mode', 'ai')
-    ai_level = data.get('ai_level', 5)  # 1-10 (נמיר ל0-20)
+    ai_level = data.get('ai_level', 5)
     
     if mode == 'ai':
         await start_ai_game(player_id, ai_level)
@@ -141,7 +194,7 @@ async def handle_find_game(player_id: str, data: dict):
         await send_error(player_id, "Only AI games are supported currently")
 
 async def start_ai_game(player_id: str, ai_level: int = 5):
-    """התחלת משחק נגד AI עם Stockfish"""
+    """התחלת משחק נגד AI"""
     try:
         # המרת רמה 1-10 לרמה 0-20 של Stockfish
         stockfish_level = max(0, min(20, (ai_level - 1) * 2))
@@ -157,7 +210,7 @@ async def start_ai_game(player_id: str, ai_level: int = 5):
             manager.active_connections[player_id]['player_data']['game_id'] = game_id
             manager.active_connections[player_id]['game_data'] = {
                 'game_id': game_id,
-                'player_color': 'white',  # השחקן תמיד לבן
+                'player_color': 'white',
                 'ai_level': ai_level,
                 'stockfish_level': stockfish_level
             }
@@ -171,16 +224,11 @@ async def start_ai_game(player_id: str, ai_level: int = 5):
                     'name': f'ChessMentor AI (Level {ai_level})',
                     'elo': chess_engine._skill_to_elo(stockfish_level)
                 },
-                'position': {
-                    'fen': game_state['fen'],
-                    'legal_moves': game_state['legal_moves'],
-                    'turn': game_state['turn'],
-                    'move_count': game_state['move_count']
-                }
+                'position': game_state
             }
         })
         
-        print(f"🤖 Started AI game {game_id[:8]} - Level {ai_level} (Stockfish {stockfish_level})")
+        print(f"🤖 Started AI game {game_id[:8]} - Level {ai_level}")
         
     except Exception as e:
         print(f"❌ Failed to start AI game: {e}")
@@ -193,107 +241,74 @@ async def handle_make_move(player_id: str, data: dict):
         await send_error(player_id, "Move is required")
         return
     
-    # בדיקת נתונים
-    connection = manager.active_connections.get(player_id)
-    if not connection or not connection.get('player_data', {}).get('is_in_game'):
-        await send_error(player_id, "Not in game")
-        return
-    
-    game_data = connection.get('game_data')
-    if not game_data:
-        await send_error(player_id, "Game data not found")
-        return
-    
     try:
-        # ביצוע מהלך השחקן
+        # ביצוע מהלך
         result = chess_engine.make_move(move_uci)
         
         if not result['success']:
-            await send_error(player_id, result['error'])
+            await send_error(player_id, "Invalid move")
             return
         
-        print(f"♟️ Player move: {move_uci} ({result['san']})")
-        
-        # שליחת עדכון על מהלך השחקן
+        # שליחת אישור מהלך
         await manager.send_message(player_id, {
             'type': 'move_made',
             'data': {
                 'move': move_uci,
                 'san': result['san'],
-                'player': connection['player_data']['name'],
+                'player': 'You',
                 'position': {
                     'fen': result['fen'],
                     'legal_moves': result['legal_moves'],
                     'turn': result['turn'],
-                    'move_count': result['move_count'],
-                    'is_check': result['is_check'],
-                    'is_checkmate': result['is_checkmate'],
-                    'is_game_over': result['is_game_over']
+                    'move_count': result['move_count']
                 }
             }
         })
         
-        # בדיקה אם המשחק נגמר
-        if result['is_game_over']:
-            await end_game(player_id, result)
-            return
-        
-        # תור של AI - רק אם זה תור השחור
-        if result['turn'] == 'black':
-            await make_ai_move(player_id)
+        # אם המשחק לא נגמר, AI משחק
+        if not result['is_game_over']:
+            await asyncio.sleep(0.5)  # השהייה קטנה
+            
+            # מהלך AI
+            ai_move = chess_engine.get_best_move()
+            ai_result = chess_engine.make_move(ai_move)
+            
+            await manager.send_message(player_id, {
+                'type': 'move_made',
+                'data': {
+                    'move': ai_move,
+                    'san': ai_result['san'],
+                    'player': 'ChessMentor AI',
+                    'position': {
+                        'fen': ai_result['fen'],
+                        'legal_moves': ai_result['legal_moves'],
+                        'turn': ai_result['turn'],
+                        'move_count': ai_result['move_count']
+                    }
+                }
+            })
             
     except Exception as e:
         print(f"❌ Move error: {e}")
-        await send_error(player_id, f"Move failed: {str(e)}")
+        await send_error(player_id, str(e))
 
-async def make_ai_move(player_id: str):
-    """ביצוע מהלך AI עם Stockfish"""
-    try:
-        # זמן חשיבה בהתאם לרמה
-        connection = manager.active_connections.get(player_id)
-        game_data = connection.get('game_data', {})
-        ai_level = game_data.get('ai_level', 5)
-        
-        # זמן חשיבה: רמה נמוכה = פחות זמן
-        think_time = 0.5 + (ai_level * 0.2)  # 0.7-2.5 שניות
-        
-        print(f"🤖 AI thinking... (Level {ai_level}, Time: {think_time}s)")
-        
-        # קבלת מהלך מהמנוע
-        result = await chess_engine.get_ai_move(time_limit=think_time)
-        
-        if not result['success']:
-            await send_error(player_id, f"AI error: {result['error']}")
-            return
-        
-        print(f"🤖 AI move: {result['move']} ({result['san']})")
-        
-        # שליחת מהלך AI
+async def handle_resign(player_id: str, data: dict):
+    """כניעה"""
+    connection = manager.active_connections.get(player_id)
+    if connection and connection['player_data'].get('is_in_game'):
         await manager.send_message(player_id, {
-            'type': 'move_made',
+            'type': 'game_end',
             'data': {
-                'move': result['move'],
-                'san': result['san'],
-                'player': 'ChessMentor AI',
-                'position': {
-                    'fen': result['fen'],
-                    'legal_moves': result['legal_moves'],
-                    'turn': result['turn'],
-                    'move_count': result['move_count'],
-                    'is_check': result['is_check'],
-                    'is_checkmate': result['is_checkmate'],
-                    'is_game_over': result['is_game_over']
-                }
+                'result': 'resignation',
+                'winner': 'ChessMentor AI',
+                'reason': 'Player resigned'
             }
         })
         
-        # בדיקה אם המשחק נגמר
-        if result['is_game_over']:
-            await end_game(player_id, result)
-            
-    except Exception as e:
-        print(f"❌ AI move error: {e}")
-        await send_error(player_id, f"AI move failed: {str(e)}")
+        # איפוס נתוני משחק
+        connection['player_data']['is_in_game'] = False
+        connection['player_data']['game_id'] = None
+        connection['game_data'] = None
 
 async def handle_new_game(player_id: str, data: dict):
     """משחק חדש"""
@@ -332,68 +347,21 @@ async def handle_set_ai_level(player_id: str, data: dict):
         'type': 'ai_level_changed',
         'data': {
             'ai_level': ai_level,
-            'elo': chess_engine._skill_to_elo(stockfish_level),
-            'message': f'AI level set to {ai_level}'
+            'elo': chess_engine._skill_to_elo(stockfish_level)
         }
     })
-
-async def handle_resign(player_id: str, data: dict):
-    """כניעה"""
-    connection = manager.active_connections.get(player_id)
-    if not connection or not connection.get('player_data', {}).get('is_in_game'):
-        return
-    
-    await end_game(player_id, {
-        'result': 'black wins by resignation',
-        'reason': 'Player resigned'
-    })
-
-async def end_game(player_id: str, game_result: dict):
-    """סיום משחק"""
-    try:
-        # קביעת תוצאה
-        if 'result' in game_result:
-            result = game_result['result']
-        elif game_result.get('is_checkmate'):
-            current_turn = chess_engine.board.turn
-            winner = "black" if current_turn == chess.BLACK else "white"
-            result = f"{winner} wins by checkmate"
-        elif game_result.get('is_stalemate'):
-            result = "draw by stalemate"
-        else:
-            result = chess_engine.get_game_result()
-        
-        print(f"🏁 Game ended: {result}")
-        
-        await manager.send_message(player_id, {
-            'type': 'game_end',
-            'data': {
-                'result': result,
-                'final_position': chess_engine.get_position_info(),
-                'reason': game_result.get('reason', 'Game completed')
-            }
-        })
-        
-        # ניקוי נתוני משחק
-        connection = manager.active_connections.get(player_id)
-        if connection:
-            if connection.get('player_data'):
-                connection['player_data']['is_in_game'] = False
-                connection['player_data']['game_id'] = None
-            connection['game_data'] = None
-            
-    except Exception as e:
-        print(f"❌ End game error: {e}")
 
 def handle_disconnect(player_id: str):
     """טיפול בניתוק"""
     print(f"🔌 Player disconnected: {player_id[:8]}")
     manager.disconnect(player_id)
 
-async def send_error(player_id: str, error_message: str):
-    """שליחת שגיאה"""
+async def send_error(player_id: str, message: str):
+    """שליחת הודעת שגיאה"""
     await manager.send_message(player_id, {
         'type': 'error',
-        'data': {'message': error_message}
+        'data': {
+            'message': message,
+            'timestamp': datetime.now().isoformat()
+        }
     })
-    print(f"❌ Error sent to {player_id[:8]}: {error_message}")

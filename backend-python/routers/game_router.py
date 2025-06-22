@@ -3,362 +3,266 @@
 Game Routes - נתיבים של משחקים ומאמן
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from utils.mock_data import mock_db
-from utils.mock_responses import get_coach_response
 from datetime import datetime
-import time
-import random
+import uuid
+from typing import Optional, Dict, Any
+from pydantic import BaseModel
+
+# יבוא הסרוויסים הנדרשים
+import sys
+sys.path.append('..')
+from auth_service import get_current_user, db
 
 router = APIRouter()
 
+# Models
+class CoachChatRequest(BaseModel):
+    sessionId: str
+    message: str
+    gameState: Optional[Dict[str, Any]] = None
+    analysisType: Optional[str] = "general"
+
+class GameActionRequest(BaseModel):
+    game_id: str
+    action: str
+    data: Optional[Dict[str, Any]] = None
+
+# מאגר זמני למשחקים פעילים
+active_games = {}
+
+# תגובות מדומות למאמן
+COACH_RESPONSES = {
+    "general": [
+        "תמיד חשוב להסתכל על כל הלוח לפני ביצוע מהלך. חפש איומים והזדמנויות.",
+        "שליטה במרכז הלוח היא אחד העקרונות החשובים ביותר בשח.",
+        "זכור לפתח את הכלים שלך לפני שאתה מתקיף. פיתוח טוב הוא המפתח להצלחה.",
+        "אל תזיז את אותו כלי פעמיים בפתיחה אלא אם זה הכרחי.",
+        "בדוק תמיד אם יש לך או ליריב תקיפות או איומים על כלים חשובים."
+    ],
+    "opening": [
+        "בפתיחה, המטרות העיקריות הן: שליטה במרכז, פיתוח כלים, והגנה על המלך.",
+        "e4 ו-d4 הם המהלכים הפופולריים ביותר בפתיחה כי הם שולטים במרכז.",
+        "אל תוציא את המלכה מוקדם מדי - היא עלולה להיות מותקפת על ידי כלים קטנים.",
+        "הצרחה מוקדם כדי להביא את המלך למקום בטוח.",
+        "נסה לפתח פרשים לפני רצים בדרך כלל."
+    ],
+    "middlegame": [
+        "במשחק האמצעי, חפש נקודות חולשה במחנה היריב.",
+        "צור איומים מרובים - זה מאלץ את היריב לבחור מה להגן.",
+        "חשוב על תוכניות ארוכות טווח, לא רק על המהלך הבא.",
+        "שמור על הרגלים שלך מחוברים ומוגנים.",
+        "חפש הזדמנויות לשיפור מיקום הכלים שלך."
+    ],
+    "endgame": [
+        "בסיום, המלך הופך לכלי אקטיבי - הוצא אותו למרכז.",
+        "רגלים הופכים חשובים מאוד בסיום - הם יכולים להפוך למלכות.",
+        "נסה ליצור רגלים חופשיים ומוגנים.",
+        "במצבי צריח, שמור את הצריח מאחורי הרגלים החופשיים.",
+        "דע את הסיומים הבסיסיים: מלך ומלכה נגד מלך, מלך וצריח נגד מלך."
+    ],
+    "tactics": [
+        "חפש מזלגות - תקיפה של שני כלים בו זמנית.",
+        "בדוק אם יש 'פינים' - כלי שלא יכול לזוז כי יחשוף כלי חשוב יותר.",
+        "חפש 'skewers' - דומה לפין אבל הכלי החשוב נמצא מלפנים.",
+        "תמיד בדוק אם יש מט בכמה מהלכים.",
+        "לפעמים הקרבה של כלי יכולה להוביל ליתרון גדול."
+    ]
+}
+
+def get_coach_response(message: str, analysis_type: str, game_state: Optional[dict] = None) -> str:
+    """קבלת תגובה מתאימה מהמאמן"""
+    # בחירת קטגוריה מתאימה
+    responses = COACH_RESPONSES.get(analysis_type, COACH_RESPONSES["general"])
+    
+    # בחירת תגובה אקראית מהקטגוריה
+    import random
+    base_response = random.choice(responses)
+    
+    # הוספת התייחסות להודעה המקורית
+    if "?" in message.lower():
+        intro = "שאלה מצוינת! "
+    elif any(word in message.lower() for word in ["עזור", "help", "טיפ", "tip"]):
+        intro = "בהחלט, הנה טיפ: "
+    else:
+        intro = ""
+    
+    return intro + base_response
+
 @router.post("/chess/coach")
-async def chess_coach_chat(request_data: dict):
+async def chess_coach_chat(
+    request: CoachChatRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """צ'אט עם המאמן AI"""
     try:
-        session_id = request_data.get('sessionId', '').strip()
-        message = request_data.get('message', '').strip()
-        game_state = request_data.get('gameState')
-        analysis_type = request_data.get('analysisType', 'general')
-        
-        if not session_id:
-            raise HTTPException(status_code=400, detail="Session ID required")
-        
-        if not message:
-            raise HTTPException(status_code=400, detail="Message is required")
-        
-        # בדיקת session
-        session = mock_db.get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=401, detail="Invalid session")
-        
-        # בדיקה שזה session OpenAI
-        if session.get('type') != 'openai':
-            raise HTTPException(status_code=401, detail="OpenAI session required")
-        
         # קבלת תגובה מתואמת מהמאמן
-        response_text = get_coach_response(message, analysis_type, game_state)
+        response_text = get_coach_response(
+            request.message, 
+            request.analysisType, 
+            request.gameState
+        )
         
-        # הוספת מידע על ה-session
-        response_text += f"\n\n---\n💬 Session: {session_id[:8]}... | Type: {analysis_type}"
+        # הוספת מידע על המשתמש
+        response_text += f"\n\n💡 {current_user['username']}, המשך לשאול שאלות!"
         
         return JSONResponse({
             'success': True,
             'response': response_text,
-            'analysis_type': analysis_type,
+            'analysis_type': request.analysisType,
             'timestamp': datetime.now().isoformat(),
-            'session_valid_until': session.get('timestamp', 0) + 86400  # 24 שעות
+            'user': current_user['username']
         })
         
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"Error calling coach: {e}")
+        print(f"Error in coach chat: {e}")
         raise HTTPException(status_code=500, detail="Failed to get response from chess coach")
 
-@router.get("/games")
-async def get_active_games():
-    """רשימת משחקים פעילים"""
-    try:
-        active_games = []
-        
-        for game_id, game in mock_db.games.items():
-            if game['status'] == 'active':
-                # מידע על השחקנים
-                white_name = "AI" if game['white_player'] == 'AI' else f"Player_{game['white_player'][:8]}"
-                black_name = "AI" if game['black_player'] == 'AI' else f"Player_{game['black_player'][:8]}"
-                
-                active_games.append({
-                    "id": game_id,
-                    "type": game['type'],
-                    "players": {
-                        "white": white_name,
-                        "black": black_name
-                    },
-                    "status": game['status'],
-                    "move_count": len(game['moves']),
-                    "duration": int(time.time() - game['start_time']),
-                    "last_move": game['moves'][-1] if game['moves'] else None,
-                    "created_at": game.get('metadata', {}).get('created_at')
-                })
-        
-        return {
-            "success": True,
-            "active_games": active_games,
-            "total_active": len(active_games),
-            "server_time": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        print(f"Error getting games: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get games")
-
-@router.get("/user/{user_id}/games")
-async def get_user_games(user_id: str, limit: int = Query(20, ge=1, le=100)):
-    """משחקי משתמש"""
-    try:
-        if not user_id:
-            raise HTTPException(status_code=400, detail="User ID required")
-        
-        # בדיקה אם המשתמש קיים
-        user = mock_db.get_user_by_id(user_id)
-        if not user:
-            # יצירת משחקים דמה לבדיקה
-            mock_user_games = generate_mock_user_games(user_id, limit)
-        else:
-            # משחקים אמיתיים מהמסד
-            real_games = mock_db.get_user_games(user_id, limit)
-            mock_user_games = []
-            
-            for game in real_games:
-                opponent = game['black_player'] if game['white_player'] == user_id else game['white_player']
-                opponent_name = "AI" if opponent == 'AI' else f"Player_{opponent[:8]}"
-                
-                # קביעת תוצאה
-                if game.get('result'):
-                    if 'white wins' in game['result'].lower():
-                        result = 'win' if game['white_player'] == user_id else 'loss'
-                    elif 'black wins' in game['result'].lower():
-                        result = 'win' if game['black_player'] == user_id else 'loss'
-                    else:
-                        result = 'draw'
-                else:
-                    result = 'ongoing'
-                
-                mock_user_games.append({
-                    "id": game['id'],
-                    "opponent": opponent_name,
-                    "opponent_type": "AI" if opponent == 'AI' else "Human",
-                    "result": result,
-                    "date": game.get('metadata', {}).get('created_at', datetime.now().isoformat()),
-                    "moves": len(game['moves']),
-                    "duration": format_game_duration(game.get('start_time', time.time())),
-                    "opening": get_random_opening(),
-                    "your_color": "white" if game['white_player'] == user_id else "black",
-                    "elo_change": get_random_elo_change(result)
-                })
-            
-            # אם אין משחקים אמיתיים, צור דמה
-            if not mock_user_games:
-                mock_user_games = generate_mock_user_games(user_id, min(limit, 5))
-        
-        return {
-            "success": True,
-            "games": mock_user_games,
-            "total_games": len(mock_user_games),
-            "user_id": user_id
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error getting user games: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get user games")
-
-@router.get("/user/{user_id}/stats")
-async def get_user_stats(user_id: str):
-    """סטטיסטיקות משתמש"""
-    try:
-        if not user_id:
-            raise HTTPException(status_code=400, detail="User ID required")
-        
-        user = mock_db.get_user_by_id(user_id)
-        
-        if user:
-            # סטטיסטיקות אמיתיות
-            games_played = user.get('games_played', 0)
-            games_won = user.get('games_won', 0)
-            win_rate = round((games_won / max(games_played, 1)) * 100, 1)
-            
-            stats = {
-                "elo_rating": user.get('elo_rating', 1200),
-                "games_played": games_played,
-                "games_won": games_won,
-                "games_lost": games_played - games_won,
-                "win_rate": win_rate,
-                "current_streak": calculate_current_streak(user_id),
-                "best_streak": user.get('best_streak', random.randint(3, 12)),
-                "tactics_solved": user.get('tactics_solved', random.randint(50, 500)),
-                "tactics_rating": user.get('tactics_rating', user.get('elo_rating', 1200) + random.randint(-200, 300)),
-                "total_time_played": format_total_time(games_played),
-                "average_game_length": f"{random.randint(8, 25)}m {random.randint(10, 59)}s",
-                "favorite_opening": get_random_opening(),
-                "last_active": user.get('last_active', datetime.now().isoformat())
-            }
-        else:
-            # סטטיסטיקות דמה
-            stats = {
-                "elo_rating": 1200,
-                "games_played": 0,
-                "games_won": 0,
-                "games_lost": 0,
-                "win_rate": 0,
-                "current_streak": 0,
-                "best_streak": 0,
-                "tactics_solved": 0,
-                "tactics_rating": 1200,
-                "total_time_played": "0h 0m",
-                "average_game_length": "0m 0s",
-                "favorite_opening": "None",
-                "last_active": datetime.now().isoformat()
-            }
-        
-        return {
-            "success": True,
-            "stats": stats,
-            "user_id": user_id,
-            "generated_at": datetime.now().isoformat()
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error getting user stats: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get user stats")
-
-@router.get("/leaderboard")
-async def get_leaderboard(limit: int = Query(10, ge=5, le=50)):
-    """טבלת ליגה"""
-    try:
-        # יצירת טבלת ליגה דמה מבוססת משתמשים קיימים + דמה
-        leaderboard = []
-        
-        # הוספת משתמשים אמיתיים
-        for user in mock_db.users.values():
-            leaderboard.append({
-                "rank": 0,  # נקבע מאוחר יותר
-                "username": user['username'],
-                "elo_rating": user.get('elo_rating', 1200),
-                "games_played": user.get('games_played', 0),
-                "games_won": user.get('games_won', 0),
-                "win_rate": round((user.get('games_won', 0) / max(user.get('games_played', 1), 1)) * 100, 1),
-                "is_online": random.choice([True, False])
-            })
-        
-        # הוספת שחקנים דמה אם צריך
-        while len(leaderboard) < limit:
-            fake_elo = random.randint(800, 2000)
-            fake_games = random.randint(10, 200)
-            fake_wins = random.randint(0, fake_games)
-            
-            leaderboard.append({
-                "rank": 0,
-                "username": f"Player{random.randint(1000, 9999)}",
-                "elo_rating": fake_elo,
-                "games_played": fake_games,
-                "games_won": fake_wins,
-                "win_rate": round((fake_wins / fake_games) * 100, 1),
-                "is_online": random.choice([True, False])
-            })
-        
-        # מיון לפי ELO וקביעת דירוג
-        leaderboard.sort(key=lambda x: x['elo_rating'], reverse=True)
-        for i, player in enumerate(leaderboard[:limit]):
-            player['rank'] = i + 1
-        
-        return {
-            "success": True,
-            "leaderboard": leaderboard[:limit],
-            "total_players": len(leaderboard),
-            "updated_at": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        print(f"Error getting leaderboard: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get leaderboard")
-
-@router.get("/statistics")
-async def get_server_statistics():
-    """סטטיסטיקות שרת כלליות"""
-    try:
-        stats = mock_db.get_statistics()
-        
-        # הוספת מידע נוסף
-        enhanced_stats = {
-            **stats,
-            "server_uptime": format_uptime(),
-            "average_game_length": f"{random.randint(15, 30)} minutes",
-            "most_popular_time_control": "Unlimited",
-            "top_opening": get_random_opening(),
-            "daily_new_users": random.randint(5, 25),
-            "peak_concurrent_users": random.randint(50, 200),
-            "total_moves_today": random.randint(1000, 5000),
-            "server_load": f"{random.randint(10, 80)}%",
-            "updated_at": datetime.now().isoformat()
-        }
-        
-        return {
-            "success": True,
-            "statistics": enhanced_stats
-        }
-        
-    except Exception as e:
-        print(f"Error getting server statistics: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get statistics")
-
-# Helper Functions
-def generate_mock_user_games(user_id: str, limit: int) -> list:
-    """יצירת משחקים דמה למשתמש"""
-    games = []
+@router.get("/games/active")
+async def get_active_games(current_user: dict = Depends(get_current_user)):
+    """רשימת משחקים פעילים של המשתמש"""
+    user_games = []
     
-    for i in range(limit):
-        result_options = ['win', 'loss', 'draw']
-        result = random.choice(result_options)
-        
-        games.append({
-            "id": f"game_{user_id[:8]}_{i}",
-            "opponent": "AI" if i % 3 == 0 else f"Player{random.randint(100, 999)}",
-            "opponent_type": "AI" if i % 3 == 0 else "Human",
-            "result": result,
-            "date": datetime.now().isoformat(),
-            "moves": random.randint(20, 80),
-            "duration": f"{random.randint(5, 45)}m {random.randint(10, 59)}s",
-            "opening": get_random_opening(),
-            "your_color": random.choice(["white", "black"]),
-            "elo_change": get_random_elo_change(result)
+    for game_id, game in active_games.items():
+        if game['white_player'] == current_user['user_id'] or game['black_player'] == current_user['user_id']:
+            user_games.append({
+                'game_id': game_id,
+                'status': game['status'],
+                'opponent': game.get('opponent_name', 'AI'),
+                'color': 'white' if game['white_player'] == current_user['user_id'] else 'black',
+                'created_at': game['created_at']
+            })
+    
+    return JSONResponse({
+        'success': True,
+        'games': user_games,
+        'total': len(user_games)
+    })
+
+@router.post("/games/new")
+async def create_new_game(current_user: dict = Depends(get_current_user)):
+    """יצירת משחק חדש"""
+    game_id = str(uuid.uuid4())
+    
+    game = {
+        'game_id': game_id,
+        'white_player': current_user['user_id'],
+        'black_player': 'ai',
+        'opponent_name': 'ChessMentor AI',
+        'status': 'active',
+        'moves': [],
+        'created_at': datetime.now().isoformat(),
+        'last_move': None
+    }
+    
+    active_games[game_id] = game
+    
+    return JSONResponse({
+        'success': True,
+        'game_id': game_id,
+        'message': 'Game created successfully'
+    })
+
+@router.post("/games/action")
+async def game_action(
+    request: GameActionRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """ביצוע פעולה במשחק"""
+    game = active_games.get(request.game_id)
+    
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # וידוא שהמשתמש משתתף במשחק
+    if game['white_player'] != current_user['user_id'] and game['black_player'] != current_user['user_id']:
+        raise HTTPException(status_code=403, detail="Not your game")
+    
+    # טיפול בפעולות שונות
+    if request.action == 'move':
+        # הוספת מהלך
+        move_data = request.data or {}
+        game['moves'].append({
+            'move': move_data.get('move'),
+            'timestamp': datetime.now().isoformat(),
+            'player': current_user['user_id']
         })
+        game['last_move'] = datetime.now().isoformat()
+        
+    elif request.action == 'resign':
+        game['status'] = 'completed'
+        game['result'] = 'resigned'
+        
+    elif request.action == 'offer_draw':
+        game['draw_offered'] = True
+        
+    else:
+        raise HTTPException(status_code=400, detail="Unknown action")
     
-    return games
+    return JSONResponse({
+        'success': True,
+        'message': f'Action {request.action} completed',
+        'game_status': game['status']
+    })
 
-def get_random_opening() -> str:
-    """קבלת פתיחה רנדומלית"""
-    openings = [
-        "Italian Game", "Spanish Opening", "Queen's Gambit", "King's Indian Defense",
-        "Sicilian Defense", "French Defense", "English Opening", "Caro-Kann Defense",
-        "Alekhine Defense", "Scandinavian Defense", "Pirc Defense", "Modern Defense"
-    ]
-    return random.choice(openings)
+@router.get("/games/{game_id}")
+async def get_game_details(
+    game_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """קבלת פרטי משחק"""
+    game = active_games.get(game_id)
+    
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # וידוא שהמשתמש משתתף במשחק או שהמשחק ציבורי
+    if game['white_player'] != current_user['user_id'] and game['black_player'] != current_user['user_id']:
+        # במשחק אמיתי, בדוק אם המשחק ציבורי
+        raise HTTPException(status_code=403, detail="Not authorized to view this game")
+    
+    return JSONResponse({
+        'success': True,
+        'game': game
+    })
 
-def get_random_elo_change(result: str) -> str:
-    """קבלת שינוי ELO רנדומלי"""
-    if result == 'win':
-        return f"+{random.randint(8, 25)}"
-    elif result == 'loss':
-        return f"-{random.randint(8, 20)}"
-    else:  # draw
-        return f"{random.choice(['+', '-'])}{random.randint(1, 5)}"
+@router.get("/puzzles/daily")
+async def get_daily_puzzle():
+    """קבלת חידה יומית"""
+    # חידה מדומה לדוגמה
+    puzzle = {
+        'id': 'daily_' + datetime.now().strftime('%Y%m%d'),
+        'fen': 'r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+        'solution': ['Bxc6', 'dxc6', 'Nxe5'],
+        'difficulty': 'medium',
+        'theme': 'tactics',
+        'description': 'White to move and win material'
+    }
+    
+    return JSONResponse({
+        'success': True,
+        'puzzle': puzzle
+    })
 
-def calculate_current_streak(user_id: str) -> int:
-    """חישוב רצף נוכחי"""
-    return random.randint(0, 8)
-
-def format_game_duration(start_time: float) -> str:
-    """פורמט משך משחק"""
-    duration = int(time.time() - start_time)
-    minutes = duration // 60
-    seconds = duration % 60
-    return f"{minutes}m {seconds}s"
-
-def format_total_time(games_played: int) -> str:
-    """פורמט זמן כולל"""
-    total_minutes = games_played * random.randint(15, 30)
-    hours = total_minutes // 60
-    minutes = total_minutes % 60
-    return f"{hours}h {minutes}m"
-
-def format_uptime() -> str:
-    """פורמט זמן פעילות שרת"""
-    hours = random.randint(1, 72)
-    minutes = random.randint(0, 59)
-    return f"{hours}h {minutes}m"
+@router.get("/stats/overview")
+async def get_user_stats(current_user: dict = Depends(get_current_user)):
+    """סטטיסטיקות המשתמש"""
+    # סטטיסטיקות מדומות
+    stats = {
+        'total_games': 42,
+        'wins': 23,
+        'losses': 15,
+        'draws': 4,
+        'rating': 1456,
+        'puzzles_solved': 127,
+        'accuracy': 0.76,
+        'favorite_opening': 'Italian Game',
+        'improvement_rate': '+12.3%'
+    }
+    
+    return JSONResponse({
+        'success': True,
+        'stats': stats,
+        'user': current_user['username']
+    })

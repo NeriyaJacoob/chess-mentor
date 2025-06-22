@@ -1,61 +1,73 @@
-// frontend/services/authService.js
-/**
- * שירות Authentication לצד הלקוח
- */
+// frontend-react/src/services/authService.js
+// שירות Authentication ו-WebSocket מתוקן
 
+import axios from 'axios';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
+// ============= Authentication Service =============
 class AuthService {
   constructor() {
-    this.baseURL = 'http://localhost:5001';
+    this.apiClient = axios.create({
+      baseURL: API_BASE_URL,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
     this.accessToken = localStorage.getItem('access_token');
     this.refreshToken = localStorage.getItem('refresh_token');
     this.user = JSON.parse(localStorage.getItem('user') || 'null');
-    this.refreshPromise = null;
+
+    // Interceptor להוספת token לכל בקשה
+    this.apiClient.interceptors.request.use(
+      (config) => {
+        if (this.accessToken) {
+          config.headers.Authorization = `Bearer ${this.accessToken}`;
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    // Interceptor לטיפול בתגובות
+    this.apiClient.interceptors.response.use(
+      (response) => response.data,
+      async (error) => {
+        if (error.response?.status === 401 && error.config && !error.config._retry) {
+          error.config._retry = true;
+          try {
+            await this.refreshAccessToken();
+            error.config.headers.Authorization = `Bearer ${this.accessToken}`;
+            return this.apiClient.request(error.config);
+          } catch (refreshError) {
+            this.clearAuthData();
+            window.location.href = '/login';
+            return Promise.reject(refreshError);
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
-  // ============= API Methods =============
+  // ============= API Calls =============
 
-  async apiCall(endpoint, method = 'GET', body = null, skipAuth = false) {
-    const url = `${this.baseURL}${endpoint}`;
-    const headers = {
-      'Content-Type': 'application/json'
-    };
-
-    // הוספת JWT token אם קיים ולא מתעלמים מהאימות
-    if (!skipAuth && this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
-    }
-
-    const config = {
-      method,
-      headers
-    };
-
-    if (body && method !== 'GET') {
-      config.body = JSON.stringify(body);
-    }
-
+  async apiCall(endpoint, method = 'GET', data = null) {
     try {
-      let response = await fetch(url, config);
+      const config = {
+        method,
+        url: endpoint
+      };
 
-      // אם יש שגיאת 401 וזה לא endpoint של רענון, נסה לרענן את הטוקן
-      if (response.status === 401 && !skipAuth && endpoint !== '/auth/refresh') {
-        const refreshed = await this.refreshAccessToken();
-        if (refreshed) {
-          // נסה שוב עם הטוקן החדש
-          headers['Authorization'] = `Bearer ${this.accessToken}`;
-          response = await fetch(url, { ...config, headers });
-        }
+      if (data) {
+        config.data = data;
       }
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || `HTTP ${response.status}`);
-      }
-
-      return data;
+      const response = await this.apiClient.request(config);
+      return response;
     } catch (error) {
-      console.error(`API call failed for ${endpoint}:`, error);
+      console.error(`API call failed: ${method} ${endpoint}`, error);
       throw error;
     }
   }
@@ -68,7 +80,7 @@ class AuthService {
         username,
         password,
         email
-      }, true);
+      });
 
       if (response.success) {
         this.setAuthData(response);
@@ -81,13 +93,14 @@ class AuthService {
     }
   }
 
-  async login(username, password, deviceInfo = null) {
+  async login(username, password) {
     try {
+      const deviceInfo = this.getDeviceInfo();
       const response = await this.apiCall('/auth/login', 'POST', {
         username,
         password,
-        device_info: deviceInfo || this.getDeviceInfo()
-      }, true);
+        device_info: deviceInfo
+      });
 
       if (response.success) {
         this.setAuthData(response);
@@ -102,9 +115,7 @@ class AuthService {
 
   async logout() {
     try {
-      if (this.accessToken) {
-        await this.apiCall('/auth/logout', 'POST');
-      }
+      await this.apiCall('/auth/logout', 'POST');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -114,28 +125,15 @@ class AuthService {
 
   async refreshAccessToken() {
     if (!this.refreshToken) {
-      this.clearAuthData();
-      return false;
+      throw new Error('No refresh token available');
     }
 
-    // מניעת קריאות מרובות לרענון במקביל
-    if (this.refreshPromise) {
-      return await this.refreshPromise;
-    }
-
-    this.refreshPromise = this._performRefresh();
-    const result = await this.refreshPromise;
-    this.refreshPromise = null;
-    return result;
-  }
-
-  async _performRefresh() {
     try {
       const response = await this.apiCall('/auth/refresh', 'POST', {
         refresh_token: this.refreshToken
-      }, true);
+      });
 
-      if (response.success) {
+      if (response.success && response.access_token) {
         this.accessToken = response.access_token;
         localStorage.setItem('access_token', this.accessToken);
         return true;
@@ -250,17 +248,21 @@ class WebSocketService {
 
         this.connectionId = this.generateConnectionId();
         const token = this.authService.accessToken;
+        
+        // תיקון: בניית URL נכון עם connection_id
         const wsUrl = `ws://localhost:5001/ws/${this.connectionId}${token ? `?token=${token}` : ''}`;
-
-        console.log(`🔗 Connecting to WebSocket: ${this.connectionId}`);
+        
+        console.log('🔗 Connecting to WebSocket:', wsUrl);
         this.socket = new WebSocket(wsUrl);
 
         this.socket.onopen = () => {
           console.log('✅ WebSocket connected');
           this.isConnected = true;
           this.reconnectAttempts = 0;
-          this.processMessageQueue();
-          this.emit('connected', { connectionId: this.connectionId });
+          
+          // שליחת הודעות ממתינות
+          this.flushMessageQueue();
+          
           resolve(this);
         };
 
@@ -269,7 +271,7 @@ class WebSocketService {
             const message = JSON.parse(event.data);
             this.handleMessage(message);
           } catch (error) {
-            console.error('❌ Failed to parse WebSocket message:', error);
+            console.error('Failed to parse message:', error);
           }
         };
 
@@ -277,23 +279,23 @@ class WebSocketService {
           console.log('🔌 WebSocket disconnected');
           this.isConnected = false;
           this.socket = null;
-          this.emit('disconnected', { code: event.code, reason: event.reason });
 
-          // ניסיון התחברות מחדש אוטומטי
-          if (this.reconnectAttempts < this.maxReconnectAttempts && !event.wasClean) {
-            this.attemptReconnect();
+          if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            console.log(`🔄 Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+            setTimeout(() => this.connect(), this.reconnectDelay * this.reconnectAttempts);
           }
         };
 
         this.socket.onerror = (error) => {
           console.error('❌ WebSocket error:', error);
-          this.emit('error', { error });
           reject(error);
         };
 
-        // timeout למקרה שהחיבור לא מצליח
+        // Timeout לחיבור
         setTimeout(() => {
           if (!this.isConnected) {
+            this.socket?.close();
             reject(new Error('Connection timeout'));
           }
         }, 10000);
@@ -306,190 +308,140 @@ class WebSocketService {
 
   disconnect() {
     if (this.socket) {
-      this.socket.close(1000, 'Manual disconnect');
+      this.socket.close();
+      this.socket = null;
     }
     this.isConnected = false;
-    this.socket = null;
     this.connectionId = null;
     this.rooms.clear();
     this.messageQueue = [];
-    console.log('🔌 Manually disconnected from WebSocket');
-  }
-
-  async attemptReconnect() {
-    this.reconnectAttempts++;
-    const delay = this.reconnectDelay * this.reconnectAttempts;
-
-    console.log(`🔄 Reconnecting in ${delay}ms (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-    this.emit('reconnecting', { attempt: this.reconnectAttempts, delay });
-
-    setTimeout(async () => {
-      try {
-        await this.connect();
-        // חזור לחדרים שהיו
-        for (const roomId of this.rooms) {
-          this.joinRoom(roomId);
-        }
-      } catch (error) {
-        console.error('❌ Reconnection failed:', error);
-      }
-    }, delay);
   }
 
   // ============= Message Handling =============
-
-  send(type, data = {}, roomId = null) {
-    const message = { type, data };
-    if (roomId) message.room_id = roomId;
-
-    if (this.isConnected && this.socket) {
-      try {
-        this.socket.send(JSON.stringify(message));
-        console.log('📤 Sent:', type, data);
-        return true;
-      } catch (error) {
-        console.error('❌ Failed to send message:', error);
-        return false;
-      }
-    } else {
-      // הוסף להמתנה אם לא מחובר
-      this.messageQueue.push(message);
-      console.log('📝 Message queued:', type);
-      return false;
-    }
-  }
-
-  processMessageQueue() {
-    if (this.messageQueue.length > 0) {
-      console.log(`📬 Processing ${this.messageQueue.length} queued messages`);
-      for (const message of this.messageQueue) {
-        this.socket.send(JSON.stringify(message));
-      }
-      this.messageQueue = [];
-    }
-  }
 
   handleMessage(message) {
     const { type, data } = message;
     console.log('📨 Received:', type, data);
 
-    // הודעות מיוחדות
+    // קריאה ל-callbacks רשומים
+    const callbacks = this.callbacks[type] || [];
+    callbacks.forEach(callback => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error(`Error in callback for ${type}:`, error);
+      }
+    });
+
+    // טיפול מיוחד בהודעות מסוימות
     switch (type) {
       case 'connected':
+        this.connectionId = data.connection_id;
         this.emit('connected', data);
         break;
-      case 'room_joined':
+        
+      case 'error':
+        this.emit('error', data);
+        break;
+        
+      case 'chat_message':
+        this.emit('message', data);
+        break;
+        
+      case 'joined_room':
         this.rooms.add(data.room_id);
-        this.emit('roomJoined', data);
+        this.emit('room_joined', data);
         break;
-      case 'room_left':
+        
+      case 'left_room':
         this.rooms.delete(data.room_id);
-        this.emit('roomLeft', data);
+        this.emit('room_left', data);
         break;
-      case 'pong':
-        this.emit('pong', data);
-        break;
-      default:
-        this.emit(type, data);
     }
   }
 
-  // ============= Room Management =============
+  // ============= Sending Messages =============
+
+  send(type, data = {}) {
+    const message = { type, data };
+    
+    if (!this.isConnected || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.log('📦 Queuing message:', type);
+      this.messageQueue.push(message);
+      return false;
+    }
+
+    try {
+      this.socket.send(JSON.stringify(message));
+      console.log('📤 Sent:', type, data);
+      return true;
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      return false;
+    }
+  }
+
+  flushMessageQueue() {
+    while (this.messageQueue.length > 0 && this.isConnected) {
+      const message = this.messageQueue.shift();
+      this.send(message.type, message.data);
+    }
+  }
+
+  // ============= Public Methods =============
+
+  sendChatMessage(content, room = 'general') {
+    return this.send('chat_message', { content, room });
+  }
 
   joinRoom(roomId) {
-    // בדיקה אם כבר בחדר
-    if (this.rooms.has(roomId)) {
-      console.log(`Already in room: ${roomId}`);
-      return this;
-    }
-    
-    this.send('join_room', { room_id: roomId });
-    return this;
+    return this.send('join_room', { room_id: roomId });
   }
 
   leaveRoom(roomId) {
-    this.send('leave_room', { room_id: roomId });
-    return this;
+    return this.send('leave_room', { room_id: roomId });
   }
 
-  sendToRoom(roomId, message) {
-    this.send('send_to_room', {
-      room_id: roomId,
-      message,
-      timestamp: new Date().toISOString()
-    });
-    return this;
+  getStatus() {
+    this.send('get_status', {});
   }
 
-  // ============= Direct Messaging =============
-
-  sendToUser(userId, message) {
-    this.send('send_to_user', {
-      target_user_id: userId,
-      message,
-      timestamp: new Date().toISOString()
-    });
-    return this;
-  }
-
-  broadcast(message) {
-    this.send('broadcast', {
-      message,
-      timestamp: new Date().toISOString()
-    });
-    return this;
-  }
-
-  // ============= Utility Methods =============
-
-  ping() {
-    this.send('ping', { timestamp: new Date().toISOString() });
-    return this;
-  }
-
-  getStats() {
-    this.send('get_stats');
-    return this;
-  }
-
-  generateConnectionId() {
-    return `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  // ============= Event System =============
+  // ============= Event Handling =============
 
   on(event, callback) {
     if (!this.callbacks[event]) {
       this.callbacks[event] = [];
     }
     this.callbacks[event].push(callback);
-    return this;
-  }
-
-  off(event, callback = null) {
-    if (!this.callbacks[event]) return this;
-
-    if (callback) {
+    
+    // Return unsubscribe function
+    return () => {
       this.callbacks[event] = this.callbacks[event].filter(cb => cb !== callback);
-    } else {
-      delete this.callbacks[event];
-    }
-    return this;
+    };
   }
 
-  emit(event, data = null) {
+  off(event, callback) {
     if (this.callbacks[event]) {
-      this.callbacks[event].forEach(callback => {
-        try {
-          callback(data);
-        } catch (error) {
-          console.error(`❌ Error in ${event} callback:`, error);
-        }
-      });
+      this.callbacks[event] = this.callbacks[event].filter(cb => cb !== callback);
     }
   }
 
-  // ============= Status Methods =============
+  emit(event, data) {
+    const callbacks = this.callbacks[event] || [];
+    callbacks.forEach(callback => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error(`Error in event ${event}:`, error);
+      }
+    });
+  }
+
+  // ============= Helper Methods =============
+
+  generateConnectionId() {
+    return `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
 
   getConnectionStatus() {
     return {
@@ -498,16 +450,12 @@ class WebSocketService {
       reconnectAttempts: this.reconnectAttempts,
       rooms: Array.from(this.rooms),
       queuedMessages: this.messageQueue.length,
-      isAuthenticated: this.authService.isAuthenticated()
+      isAuthenticated: !!this.authService.accessToken
     };
-  }
-
-  getRooms() {
-    return Array.from(this.rooms);
   }
 }
 
-// ============= Application Service =============
+// ============= App Service (Combined) =============
 
 class AppService {
   constructor() {
@@ -519,43 +467,38 @@ class AppService {
   async initialize() {
     if (this.initialized) return;
 
-    console.log('🚀 Initializing AppService...');
-
-    // בדוק אם יש משתמש שמור
+    // בדיקה אם יש משתמש מחובר
     if (this.auth.isAuthenticated()) {
       try {
+        // נסה לקבל את פרטי המשתמש
         await this.auth.getCurrentUser();
-        console.log('✅ User restored from storage');
+        
+        // התחבר ל-WebSocket
+        await this.ws.connect();
       } catch (error) {
-        console.error('❌ Failed to restore user:', error);
+        console.error('Failed to initialize app:', error);
         this.auth.clearAuthData();
       }
     }
 
     this.initialized = true;
-    console.log('✅ AppService initialized');
   }
 
-  async connectWebSocket() {
-    if (!this.ws.isConnected) {
+  // Proxy methods for auth
+  async login(username, password) {
+    const result = await this.auth.login(username, password);
+    if (result.success) {
       await this.ws.connect();
     }
-    return this.ws;
+    return result;
   }
 
-  async loginAndConnect(username, password) {
-    try {
-      // התחבר
-      const result = await this.auth.login(username, password);
-
-      // התחבר ל-WebSocket
-      await this.connectWebSocket();
-
-      return result;
-    } catch (error) {
-      console.error('❌ Login and connect failed:', error);
-      throw error;
+  async register(username, password, email) {
+    const result = await this.auth.register(username, password, email);
+    if (result.success) {
+      await this.ws.connect();
     }
+    return result;
   }
 
   async logout() {
@@ -563,6 +506,7 @@ class AppService {
     await this.auth.logout();
   }
 
+  // Combined status
   getStatus() {
     return {
       auth: {
@@ -574,9 +518,9 @@ class AppService {
   }
 }
 
-// יצירת אינסטנס גלובלי
+// יצירת instance יחיד
 const appService = new AppService();
 
-// ייצוא
+// Export both individual services and combined service
 export default appService;
-export { AuthService, WebSocketService, AppService };
+export { AuthService, WebSocketService };
