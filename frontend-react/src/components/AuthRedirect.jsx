@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
-import appService from '../services/authService';
+import appService from '../services/appService';
 
 const AuthRedirect = () => {
   const [isLoading, setIsLoading] = useState(true);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, LogOut, User, MessageCircle } from 'lucide-react';
-import appService from '../services/authService';
+import appService from '../services/appService';
 
 const AuthButton = () => {
   const navigate = useNavigate();

@@ -17,7 +17,7 @@ import {
 
 // ✅ Import the optimized FastChessBoard component
 import FastChessBoard from '../components/ChessBoard/ChessBoard';
-import chessApiService from '../services/chessApiService';
+import appService from '../services/appService'; 
 import { makeMove, newGame, loadGame } from '../store/slices/gameSlice';
 
 // ✅ Try to import performance monitor, with fallback
@@ -118,6 +118,31 @@ const PlayPage = () => {
     }
   }, []);
 
+  // ✅ AppService initialization
+  useEffect(() => {
+    const initializeGame = async () => {
+      try {
+        await appService.initialize();
+        console.log('✅ PlayPage: AppService initialized');
+      } catch (error) {
+        console.error('❌ PlayPage: Failed to initialize:', error);
+        setGameError('Failed to initialize game service');
+      }
+    };
+    
+    initializeGame();
+    
+    // Cleanup על ניתוק
+    return () => {
+      if (appService.chess) {
+        appService.chess.off('gameStart');
+        appService.chess.off('moveMade');
+        appService.chess.off('gameEnd');
+        appService.chess.off('error');
+      }
+    };
+  }, []);
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -128,45 +153,117 @@ const PlayPage = () => {
     return `${seconds.toFixed(1)}s`;
   };
 
+  // ✅ Setup chess listeners
+  const setupChessListeners = useCallback(() => {
+    if (!appService.chess) return;
+    
+    console.log('🔧 Setting up chess listeners...');
+    
+    // נקה listeners קודמים
+    appService.chess.off('connected');
+    appService.chess.off('gameStart');
+    appService.chess.off('moveMade');
+    appService.chess.off('gameEnd');
+    appService.chess.off('error');
+    appService.chess.off('message');
+    
+    // Setup חדש - צריך להאזין לכל סוגי ההודעות
+    appService.chess.on('connected', (data) => {
+      console.log('✅ Chess connected:', data);
+    });
+    
+    appService.chess.on('gameStart', (data) => {
+      console.log('🎮 Chess game started:', data);
+      setIsGameActive(true);
+      setAiThinking(false);
+      setLastMoveResult({ ...data, type: 'game_start' });
+    });
+    
+    appService.chess.on('moveMade', (data) => {
+      console.log('♟️ Move made:', data);
+      setMoveCount(prev => prev + 1);
+      setLastMoveResult(data);
+      setAiThinking(false);
+      
+      // עדכן את Redux state
+      if (data.move) {
+        dispatch(makeMove({ 
+          from: data.move.slice(0, 2), 
+          to: data.move.slice(2, 4),
+          fen: data.fen 
+        }));
+      }
+    });
+    
+    appService.chess.on('gameEnd', (data) => {
+      console.log('🏁 Chess game ended:', data);
+      setIsGameActive(false);
+      setAiThinking(false);
+      setLastMoveResult({ ...data, type: 'game_end' });
+    });
+    
+    appService.chess.on('error', (error) => {
+      console.error('❌ Chess error:', error);
+      setGameError(error.message || 'Game error occurred');
+      setIsGameActive(false);
+      setAiThinking(false);
+    });
+    
+    // האזנה כללית להודעות - לדיבוג
+    appService.chess.on('message', (data) => {
+      console.log('📨 Chess message received:', data);
+      
+      // טיפול ידני במקרה שאירועים ספציפיים לא עובדים
+      if (data.type === 'move_made') {
+        console.log('🔄 Handling move_made manually');
+        setMoveCount(prev => prev + 1);
+        setLastMoveResult(data.data);
+        setAiThinking(false);
+        
+        if (data.data.move) {
+          dispatch(makeMove({ 
+            from: data.data.move.slice(0, 2), 
+            to: data.data.move.slice(2, 4),
+            fen: data.data.fen 
+          }));
+        }
+      }
+    });
+    
+  }, [dispatch]);
+
   // ✅ התחלת משחק מהיר
   const handleNewGame = async () => {
+    console.log('🔴 handleNewGame called!'); // DEBUG: בדיקה שהפונקציה נקראת
+    
     try {
       setIsStartingGame(true);
       setGameError(null);
       setAiThinkTime(0);
       
       console.log('🎮 Starting FAST game...', { aiLevel, playerColor, speed: speedSettings[speedSetting] });
+      console.log('🔍 AppService status:', appService?.getStatus()); // DEBUG
       
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Game start timeout')), 5000)
-      );
+      // ✅ החלפה ל-AppService
+      console.log('📞 Calling appService.startNewGame...'); // DEBUG
+      await appService.startNewGame({
+        aiLevel: aiLevel,
+        playerColor: playerColor,
+        timeControl: '10+0'
+      });
       
-      const gamePromise = chessApiService.newGame(aiLevel, playerColor);
-      const response = await Promise.race([gamePromise, timeoutPromise]);
+      // Setup chess listeners
+      console.log('🔧 Setting up chess listeners...'); // DEBUG
+      setupChessListeners();
       
-      console.log('✅ Game started quickly:', response);
+      console.log('✅ Game started quickly');
       
       setIsGameActive(true);
       setGameTime(0);
       setMoveCount(0);
-      setLastMoveResult(response);
+      setLastMoveResult({ message: 'Game started!' });
       
       dispatch(newGame());
-      if (response.position?.fen) {
-        dispatch(loadGame({ 
-          fen: response.position.fen, 
-          history: [] 
-        }));
-      }
-      
-      if (response.ai_move) {
-        console.log('🤖 AI opened with:', response.ai_move);
-        setMoveCount(1);
-        dispatch(makeMove({ 
-          from: response.ai_move.move.slice(0, 2), 
-          to: response.ai_move.move.slice(2, 4) 
-        }));
-      }
       
     } catch (error) {
       console.error('❌ Failed to start game:', error);
@@ -178,8 +275,8 @@ const PlayPage = () => {
 
   // ✅ מהלכים מהירים עם מעקב ביצועים
   const handleMove = useCallback(async (move) => {
-    if (!isGameActive || aiThinking || !chessApiService.isGameActive()) {
-      console.log('🚫 Move blocked:', { isGameActive, aiThinking, hasGameId: chessApiService.isGameActive() });
+    if (!isGameActive || aiThinking) {
+      console.log('🚫 Move blocked:', { isGameActive, aiThinking });
       return false;
     }
 
@@ -192,73 +289,42 @@ const PlayPage = () => {
       setAiThinkTime(0);
 
       const uciMove = typeof move === 'string' ? move : `${move.from}${move.to}${move.promotion || ''}`;
+      console.log('📤 Sending UCI move:', uciMove);
       
       const apiStartTime = performance.now();
       
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Move timeout - AI took too long')), 8000)
-      );
+      // ✅ החלפה ל-AppService
+      const success = appService.chess.makeMove(uciMove);
       
-      const movePromise = chessApiService.makeMove(uciMove);
-      const response = await Promise.race([movePromise, timeoutPromise]);
-      
-      performanceMonitor.trackApiCall('makeMove', apiStartTime);
-      
-      console.log('✅ Fast move response:', response);
-      
-      const uiUpdateStart = performance.now();
-      
-      dispatch(makeMove(move));
-      setMoveCount(prev => prev + 1);
-      setLastMoveResult(response);
-      
-      performanceMonitor.trackRender('moveUpdate', uiUpdateStart);
-      
-      if (response.ai_move && !response.game_over) {
-        console.log('🤖 AI responded quickly:', response.ai_move);
+      if (success) {
+        performanceMonitor.trackApiCall('makeMove', apiStartTime);
+        console.log('✅ Move sent successfully, waiting for response...');
         
-        const aiMoveStart = performance.now();
+        // עדכן מיד את ה-UI עם המהלך שלנו
+        const uiUpdateStart = performance.now();
+        dispatch(makeMove(move));
+        setMoveCount(prev => prev + 1);
         
-        setTimeout(() => {
-          dispatch(makeMove({ 
-            from: response.ai_move.move.slice(0, 2), 
-            to: response.ai_move.move.slice(2, 4) 
-          }));
-          setMoveCount(prev => prev + 1);
-          
-          performanceMonitor.trackRender('aiMoveUpdate', aiMoveStart);
-        }, 150);
+        performanceMonitor.trackRender('moveUpdate', uiUpdateStart);
+        performanceMonitor.trackMoveProcessing({ move: uciMove, success: true }, moveStartTime);
+        
+        // אל תסיר את setAiThinking כי אנחנו מחכים לתגובת AI
+        // זה יוסר ב-listener כשנקבל תגובה
+        
+        return true;
+      } else {
+        console.error('❌ Failed to send move');
+        setGameError('Failed to send move');
+        setAiThinking(false);
+        return false;
       }
-      
-      if (response.game_over) {
-        setIsGameActive(false);
-        console.log('🏁 Game ended:', response.game_result);
-      }
-      
-      performanceMonitor.trackMoveProcessing(
-        { 
-          move: uciMove, 
-          aiResponse: response.ai_move?.move,
-          gameOver: response.game_over 
-        }, 
-        moveStartTime
-      );
-      
-      return true;
       
     } catch (error) {
       console.error('❌ Move failed:', error);
       setGameError(error.message || 'Move failed');
-      
-      performanceMonitor.trackMoveProcessing(
-        { move: move, error: error.message }, 
-        moveStartTime, 
-        performance.now()
-      );
-      
-      return false;
-    } finally {
       setAiThinking(false);
+      performanceMonitor.trackMoveProcessing({ move: move, error: error.message }, moveStartTime, performance.now());
+      return false;
     }
   }, [isGameActive, aiThinking, dispatch]);
 
@@ -266,7 +332,8 @@ const PlayPage = () => {
     if (!isGameActive) return;
     
     try {
-      await chessApiService.resign();
+      // ✅ החלפה ל-AppService
+      appService.chess.resignGame();
       setIsGameActive(false);
       console.log('🏳️ Game resigned');
     } catch (error) {
@@ -310,7 +377,7 @@ const PlayPage = () => {
           {lastMoveResult && (
             <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/30 rounded-lg">
               <p className="text-blue-300 text-sm">
-                Game: {lastMoveResult.game_id?.slice(0, 8)}...
+                {lastMoveResult.message || `Status: ${lastMoveResult.type || 'active'}`}
               </p>
               {lastMoveResult.ai_move && (
                 <p className="text-blue-300 text-sm">
@@ -440,7 +507,10 @@ const PlayPage = () => {
         {/* Game Controls */}
         <div className="p-6 space-y-4">
           <button
-            onClick={handleNewGame}
+            onClick={() => {
+              console.log('🔴 Quick Game button clicked!'); // DEBUG
+              handleNewGame();
+            }}
             disabled={isStartingGame}
             className="w-full flex items-center justify-center space-x-3 px-4 py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-300 shadow-lg disabled:opacity-50"
           >

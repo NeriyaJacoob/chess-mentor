@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Mail, Lock, User, AlertCircle, Check } from 'lucide-react';
-import appService from '../services/authService';
+import appService from '../services/appService';
 
 const LoginPage = () => {
   const navigate = useNavigate();
