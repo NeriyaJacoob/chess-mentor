@@ -1,5 +1,5 @@
-// frontend-react/src/services/chessSocketService.js - FIXED FOR STOCKFISH
-// WebSocket service for real Stockfish chess engine
+// frontend-react/src/services/chessSocketService.js
+// WebSocket service for real chess games with fixed backend
 
 class ChessSocketService {
   constructor() {
@@ -9,6 +9,7 @@ class ChessSocketService {
     this.isConnected = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
+    this.playerId = null;
     this.callbacks = {
       onConnected: null,
       onGameStart: null,
@@ -22,22 +23,31 @@ class ChessSocketService {
     };
   }
 
-  // Connect to Python WebSocket server
+  // Generate unique player ID
+  generatePlayerId() {
+    return `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  // Connect to game WebSocket server
   connect(playerData = {}) {
     return new Promise((resolve, reject) => {
       try {
         // בדיקה אם כבר מחובר
         if (this.isConnected && this.socket?.readyState === WebSocket.OPEN) {
-          console.log('🔗 Already connected to server');
+          console.log('🔗 Already connected to chess server');
           resolve(this);
           return;
         }
 
-        console.log('🔗 Connecting to chess server...');
-        this.socket = new WebSocket('ws://localhost:5001/ws');
+        // יצירת player ID
+        this.playerId = this.generatePlayerId();
+        
+        console.log('🔗 Connecting to chess game server...');
+        // שימוש בנתיב המשחק החדש
+        this.socket = new WebSocket(`ws://localhost:5001/ws/game/${this.playerId}`);
         
         this.socket.onopen = () => {
-          console.log('✅ Connected to chess server');
+          console.log('✅ Connected to chess game server');
           this.isConnected = true;
           this.reconnectAttempts = 0;
           
@@ -101,7 +111,8 @@ class ChessSocketService {
 
     switch (type) {
       case 'connected':
-        console.log('✅ Joined server:', data.message);
+        console.log('✅ Joined game server:', data.message);
+        this.playerId = data.player_id;
         if (this.callbacks.onConnected) {
           this.callbacks.onConnected(data);
         }
@@ -191,7 +202,7 @@ class ChessSocketService {
     }
   }
 
-  // Game actions for Stockfish
+  // Game actions for AI
   findGame(aiLevel = 5) {
     console.log(`🤖 Starting game against AI Level ${aiLevel}`);
     return this.send('find_game', { 
@@ -299,6 +310,7 @@ class ChessSocketService {
       isInGame: this.isInGame(),
       gameId: this.gameId,
       playerColor: this.playerColor,
+      playerId: this.playerId,
       reconnectAttempts: this.reconnectAttempts
     };
   }
@@ -311,6 +323,7 @@ class ChessSocketService {
     this.isConnected = false;
     this.gameId = null;
     this.playerColor = null;
+    this.playerId = null;
     this.reconnectAttempts = 0;
     console.log('🔌 Manually disconnected from server');
   }
@@ -320,6 +333,12 @@ class ChessSocketService {
     try {
       await this.connect({ name: 'TestPlayer', elo: 1200 });
       console.log('✅ Connection test successful');
+      
+      // Start a test game
+      setTimeout(() => {
+        this.findGame(5);
+      }, 1000);
+      
       return true;
     } catch (error) {
       console.error('❌ Connection test failed:', error);

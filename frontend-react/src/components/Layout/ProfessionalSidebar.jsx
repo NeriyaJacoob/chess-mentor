@@ -260,11 +260,7 @@ const ProfessionalSidebar = ({ isCollapsed = false, onToggleCollapse }) => {
                       </span>
                     )}
                   </div>
-                  {(isHovered || isActive) && (
-                    <p className={`text-xs mt-0.5 ${isActive ? 'text-white/80' : 'text-slate-500'}`}>
-                      {item.description}
-                    </p>
-                  )}
+                  
                 </div>
               )}
 

@@ -1,19 +1,16 @@
+// frontend-react/src/Pages/LoginPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Eye, EyeOff, UserPlus, LogIn } from 'lucide-react';
+import { MessageCircle, Mail, Lock, User, AlertCircle, Check } from 'lucide-react';
 import appService from '../services/authService';
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  
-  // State
-  const [isLogin, setIsLogin] = useState(true); // true = login, false = register
-  const [showPassword, setShowPassword] = useState(false);
+  const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
-  // Form data
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -26,10 +23,11 @@ const LoginPage = () => {
       try {
         await appService.initialize();
         if (appService.auth.isAuthenticated()) {
+          console.log('✅ Already authenticated, redirecting...');
           navigate('/chat', { replace: true });
         }
       } catch (error) {
-        console.error('Auth check failed:', error);
+        console.error('Auth check error:', error);
       }
     };
     
@@ -42,51 +40,38 @@ const LoginPage = () => {
       ...prev,
       [name]: value
     }));
-    // Clear errors when user starts typing
+    // Clear errors when user types
     if (error) setError('');
-  };
-
-  const validateForm = () => {
-    if (!formData.username.trim()) {
-      setError('נא להזין שם משתמש');
-      return false;
-    }
-    
-    if (!formData.password.trim()) {
-      setError('נא להזין סיסמה');
-      return false;
-    }
-    
-    if (formData.password.length < 3) {
-      setError('הסיסמה חייבת להכיל לפחות 3 תווים');
-      return false;
-    }
-    
-    if (!isLogin && formData.email && !formData.email.includes('@')) {
-      setError('כתובת אימייל לא תקינה');
-      return false;
-    }
-    
-    return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) return;
-    
-    setIsLoading(true);
     setError('');
     setSuccess('');
     
+    // Basic validation
+    if (!formData.username || !formData.password) {
+      setError('נא למלא את כל השדות הנדרשים');
+      return;
+    }
+    
+    if (!isLogin && !formData.email) {
+      setError('נא להזין כתובת אימייל');
+      return;
+    }
+    
+    setIsLoading(true);
+    
     try {
+      let result;
+      
       if (isLogin) {
-        // Login
+        // Login flow
         console.log('🔄 Attempting login...');
-        const result = await appService.loginAndConnect(formData.username, formData.password);
+        result = await appService.login(formData.username, formData.password);
         console.log('✅ Login successful:', result);
         
-        setSuccess('התחברות בוצעה בהצלחה! מעביר אותך...');
+        setSuccess('התחברת בהצלחה! מעביר אותך...');
         
         // Redirect to chat after short delay
         setTimeout(() => {
@@ -94,9 +79,9 @@ const LoginPage = () => {
         }, 1500);
         
       } else {
-        // Register
+        // Register flow
         console.log('🔄 Attempting registration...');
-        const result = await appService.auth.register(
+        result = await appService.register(
           formData.username, 
           formData.password, 
           formData.email || null
@@ -104,9 +89,6 @@ const LoginPage = () => {
         console.log('✅ Registration successful:', result);
         
         setSuccess('הרישום בוצע בהצלחה! מעביר אותך...');
-        
-        // Connect WebSocket after registration
-        await appService.connectWebSocket();
         
         // Redirect to chat after short delay
         setTimeout(() => {
@@ -119,13 +101,19 @@ const LoginPage = () => {
       
       let errorMessage = 'שגיאה לא צפויה';
       
-      if (error.message) {
-        if (error.message.includes('Invalid username or password')) {
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        if (error.message.includes('401')) {
           errorMessage = 'שם משתמש או סיסמה שגויים';
         } else if (error.message.includes('Username already exists')) {
           errorMessage = 'שם המשתמש כבר קיים';
+        } else if (error.message.includes('Email already exists')) {
+          errorMessage = 'כתובת האימייל כבר רשומה במערכת';
         } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-          errorMessage = 'שגיאת חיבור - בדוק שהשרת פועל על localhost:8000';
+          errorMessage = 'שגיאת חיבור - בדוק שהשרת פועל על localhost:5001';
         } else {
           errorMessage = error.message;
         }
@@ -167,139 +155,141 @@ const LoginPage = () => {
             {isLogin ? 'ברוכים השבים' : 'הצטרפו אלינו'}
           </h1>
           <p className="text-gray-600">
-            {isLogin ? 'התחברו לחשבון שלכם' : 'צרו חשבון חדש'}
+            {isLogin ? 'היכנסו לחשבון שלכם' : 'צרו חשבון חדש'}
           </p>
         </div>
 
+        {/* Error/Success Messages */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-2 rtl:space-x-reverse">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+        
+        {success && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start space-x-2 rtl:space-x-reverse">
+            <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-green-700">{success}</p>
+          </div>
+        )}
+
         {/* Form */}
-        <div className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           
           {/* Username */}
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               שם משתמש
             </label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              value={formData.username}
-              onChange={handleInputChange}
-              onKeyPress={handleKeyPress}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-              placeholder="הכניסו שם משתמש"
-              disabled={isLoading}
-              autoComplete="username"
-              dir="ltr"
-            />
-          </div>
-
-          {/* Email (only for registration) */}
-          {!isLogin && (
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                אימייל (אופציונלי)
-              </label>
+            <div className="relative">
               <input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
+                type="text"
+                name="username"
+                value={formData.username}
                 onChange={handleInputChange}
                 onKeyPress={handleKeyPress}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="example@email.com"
+                className="w-full px-4 py-3 pr-10 rtl:pr-4 rtl:pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                placeholder="הזן שם משתמש"
                 disabled={isLoading}
-                autoComplete="email"
-                dir="ltr"
+                autoComplete="username"
+                autoFocus
               />
+              <User className="absolute right-3 rtl:right-auto rtl:left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            </div>
+          </div>
+
+          {/* Email (for registration only) */}
+          {!isLogin && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                אימייל (אופציונלי)
+              </label>
+              <div className="relative">
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  onKeyPress={handleKeyPress}
+                  className="w-full px-4 py-3 pr-10 rtl:pr-4 rtl:pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                  placeholder="example@email.com"
+                  disabled={isLoading}
+                  autoComplete="email"
+                />
+                <Mail className="absolute right-3 rtl:right-auto rtl:left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              </div>
             </div>
           )}
 
           {/* Password */}
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               סיסמה
             </label>
             <div className="relative">
               <input
-                id="password"
+                type="password"
                 name="password"
-                type={showPassword ? 'text' : 'password'}
                 value={formData.password}
                 onChange={handleInputChange}
                 onKeyPress={handleKeyPress}
-                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="הכניסו סיסמה"
+                className="w-full px-4 py-3 pr-10 rtl:pr-4 rtl:pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                placeholder="••••••••"
                 disabled={isLoading}
-                autoComplete={isLogin ? 'current-password' : 'new-password'}
-                dir="ltr"
+                autoComplete={isLogin ? "current-password" : "new-password"}
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                disabled={isLoading}
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+              <Lock className="absolute right-3 rtl:right-auto rtl:left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             </div>
           </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start space-x-2 rtl:space-x-reverse">
-              <div className="text-sm">{error}</div>
-            </div>
-          )}
-
-          {/* Success Message */}
-          {success && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-start space-x-2 rtl:space-x-reverse">
-              <div className="text-sm">{success}</div>
+          {/* Forgot Password Link (for login only) */}
+          {isLogin && (
+            <div className="text-right rtl:text-left">
+              <button
+                type="button"
+                className="text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                onClick={() => console.log('Forgot password clicked')}
+              >
+                שכחת סיסמה?
+              </button>
             </div>
           )}
 
           {/* Submit Button */}
           <button
-            onClick={handleSubmit}
+            type="submit"
             disabled={isLoading}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 px-4 rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse"
+            className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
+              isLoading 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.98]'
+            } text-white shadow-lg`}
           >
             {isLoading ? (
-              <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                <span>{isLogin ? 'מתחבר...' : 'נרשם...'}</span>
+                <span>מעבד...</span>
               </div>
             ) : (
-              <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                {isLogin ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                <span>{isLogin ? 'התחבר' : 'הירשם'}</span>
-              </div>
+              <span>{isLogin ? 'היכנס' : 'הירשם'}</span>
             )}
           </button>
 
-          {/* Toggle Mode */}
-          <div className="text-center">
+          {/* Toggle Mode Link */}
+          <p className="text-center text-sm text-gray-600 mt-6">
+            {isLogin ? 'עדיין אין לך חשבון?' : 'כבר יש לך חשבון?'}{' '}
             <button
+              type="button"
               onClick={toggleMode}
-              disabled={isLoading}
-              className="text-blue-600 hover:text-blue-700 font-medium transition-colors disabled:opacity-50"
+              className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
             >
-              {isLogin ? 'אין לכם חשבון? הירשמו כאן' : 'יש לכם חשבון? התחברו כאן'}
+              {isLogin ? 'הירשם כאן' : 'התחבר כאן'}
             </button>
-          </div>
-        </div>
+          </p>
 
-        {/* Footer */}
-        <div className="mt-8 pt-6 border-t border-gray-200 text-center text-sm text-gray-500">
-          <p>מערכת צ'אט מתקדמת</p>
-          <p className="mt-1">Authentication + WebSocket</p>
-          <div className="mt-2 text-xs">
-            <p>🔗 שרת: localhost:8000</p>
-            <p>💬 צ'אט: בזמן אמת</p>
-          </div>
-        </div>
+        </form>
+
       </div>
     </div>
   );

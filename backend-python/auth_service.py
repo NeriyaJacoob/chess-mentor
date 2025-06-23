@@ -220,6 +220,36 @@ class MongoDBService:
         except Exception as e:
             print(f"❌ Get user games error: {e}")
             return []
+    
+    async def get_user_by_username(self, username: str) -> Optional[dict]:
+        try:
+            user = await self.users_collection.find_one({"username": username})
+            print(f"🔍 Found user: {user is not None}")  # הוסף
+            return user
+        except Exception as e:
+            print(f"❌ Get user error: {e}")
+            return None
+        
+    async def save_game(self, user_id: str, game_data: dict) -> str:
+            """שמירת משחק שהסתיים במסד הנתונים"""
+            try:
+                game_doc = {
+                    'user_id': user_id,
+                    'created_at': datetime.utcnow(),
+                    'moves': game_data.get('moves', []),
+                    'positions': game_data.get('positions', []),
+                    'result': game_data.get('result'),
+                    'ai_level': game_data.get('ai_level', 5),
+                    'player_color': game_data.get('player_color', 'white'),
+                    'game_duration': game_data.get('duration', 0),
+                    'analysis': None
+                }
+
+                result = await self.games_collection.insert_one(game_doc)
+                return str(result.inserted_id)
+            except Exception as e:
+                print(f"❌ Save game error: {e}")
+                return ""
 
 # יצירת instance גלובלי
 db = MongoDBService()

@@ -1,0 +1,143 @@
+# הוראות הפעלה - ChessMentor מתוקן
+
+## תיקונים שבוצעו
+
+### 1. **Backend (Python)**
+
+#### תיקוני MongoDB:
+- **auth_service.py**: תוקן החיבור ל-MongoDB Atlas עם שימוש ב-`MONGO_URI` הנכון
+- הוספת indexes אוטומטיים לביצועים טובים יותר
+- טיפול נכון בשגיאות חיבור
+
+#### תיקוני WebSocket:
+- **main.py**: הוספת נתיבי WebSocket מלאים עם אימות אופציונלי
+- תמיכה בהודעות צ'אט בזמן אמת
+- ניהול חדרים וחיבורים מרובים
+
+#### נתיבי משחקים:
+- **game_router.py**: נתיבים למשחקים, מאמן AI וסטטיסטיקות
+- **websocket_router.py**: WebSocket למשחקי שח עם בוטים
+
+### 2. **Frontend (React)**
+
+#### שירותי חיבור:
+- **authService.js**: שירות אימות משולב עם WebSocket
+- **chessSocketService.js**: חיבור מתוקן למשחקי שח
+
+#### ממשק משתמש:
+- **ProfessionalSidebar.jsx**: הוספת עמוד צ'אט בסרגל הצדדי
+- ניווט תקין בין כל העמודים
+
+## הפעלת המערכת
+
+### 1. הכנת Backend
+
+```bash
+# נווט לתיקיית הבקאנד
+cd backend-python
+
+# יצירת תיקיית routers אם לא קיימת
+mkdir -p routers
+
+# העתק את הקבצים החדשים:
+# - auth_service.py (מתוקן)
+# - main.py (מתוקן)
+# - routers/__init__.py
+# - routers/game_router.py
+# - routers/websocket_router.py
+
+# התקנת תלויות (אם עדיין לא הותקנו)
+pip install -r requirements.txt
+
+# הפעלת השרת
+python main.py
+```
+
+### 2. הכנת Frontend
+
+```bash
+# נווט לתיקיית הפרונטאנד
+cd frontend-react
+
+# צור קובץ .env והעתק את התוכן מלמעלה
+
+# העתק את הקבצים המתוקנים:
+# - src/services/authService.js
+# - src/services/chessSocketService.js
+# - src/components/Layout/ProfessionalSidebar.jsx
+
+# התקנת תלויות (אם עדיין לא הותקנו)
+npm install
+
+# הפעלת האפליקציה
+npm start
+```
+
+## בדיקת הפעולה
+
+### 1. בדיקת חיבור MongoDB
+בעת הפעלת השרת, אמורות להופיע הודעות:
+```
+✅ Found MONGO_URI: mongodb+srv://...
+📁 Connected to MongoDB Atlas successfully!
+📊 Database indexes created
+```
+
+### 2. בדיקת WebSocket
+1. פתח את האפליקציה בדפדפן
+2. התחבר עם משתמש
+3. נווט לעמוד הצ'אט
+4. בדוק שמופיעה הודעת "Connected"
+
+### 3. בדיקת משחקי שח
+1. נווט לעמוד Play
+2. לחץ על "New Game"
+3. בדוק שהלוח נטען והבוט משחק
+
+## פתרון בעיות נפוצות
+
+### בעיה: MongoDB לא מתחבר
+- וודא שה-IP שלך מורשה ב-MongoDB Atlas
+- בדוק שה-connection string נכון
+- נסה להתחבר דרך MongoDB Compass
+
+### בעיה: WebSocket לא מתחבר
+- וודא שהשרת רץ על פורט 5001
+- בדוק שאין חומת אש חוסמת
+- פתח את Console בדפדפן וחפש שגיאות
+
+### בעיה: משחקי שח לא עובדים
+- וודא ש-chessSocketService.js מעודכן
+- בדוק שה-WebSocket מתחבר לנתיב הנכון
+- ראה הודעות בקונסול של השרת
+
+## תכונות זמינות
+
+### ✅ עובד כעת:
+- התחברות והרשמה עם MongoDB
+- צ'אט בזמן אמת
+- משחקים נגד בוטים (stub)
+- ניווט בין עמודים
+- סטטיסטיקות משתמש
+
+### ⏳ דורש התקנת Stockfish:
+- משחקי שח אמיתיים עם מנוע
+- ניתוח מהלכים
+- רמות קושי מדויקות
+
+## המשך פיתוח
+
+1. **התקנת Stockfish**:
+   - הורד את Stockfish מהאתר הרשמי
+   - עדכן את הנתיב ב-.env
+   - החלף את ChessEngineStub במנוע אמיתי
+
+2. **הוספת תכונות**:
+   - משחקים מרובי משתתפים
+   - שמירת היסטוריית משחקים
+   - טורנירים וליגות
+
+3. **שיפורי ביצועים**:
+   - Redis לניהול sessions
+   - WebSocket scaling
+   - CDN לנכסים סטטיים

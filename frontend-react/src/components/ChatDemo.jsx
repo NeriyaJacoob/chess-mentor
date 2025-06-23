@@ -200,7 +200,7 @@ const ChatDemo = () => {
     
     try {
       console.log('🔄 Attempting login...');
-      const result = await appService.loginAndConnect(loginForm.username, loginForm.password);
+      const result = await appService.login(loginForm.username, loginForm.password);
       console.log('✅ Login successful:', result);
       
       updateStatus();

@@ -26,11 +26,12 @@ from auth_service import (
     db
 )
 
-# יבוא נוסף למשחקי שח - יצירת קבצים ריקים אם לא קיימים
+# יבוא נוסף למשחקי שח - יצירת routers ריקים אם לא קיימים
 try:
     from routers import game_router, websocket_router
-except ImportError:
-    print("⚠️ Router modules not found, creating empty routers")
+except ImportError as e:
+    print(f"⚠️ Router modules import error: {e}")
+    print("Creating empty routers...")
     from fastapi import APIRouter
     game_router = APIRouter()
     websocket_router = APIRouter()
@@ -73,8 +74,8 @@ class OpenAIAuthRequest(BaseModel):
     apiKey: str
 
 # הוספת הנתיבים של משחקים
-app.include_router(game_router.router, prefix="/api", tags=["games"])
-app.include_router(websocket_router.router, tags=["websocket"])
+app.include_router(game_router, prefix="/api", tags=["games"])
+app.include_router(websocket_router, tags=["websocket"])
 
 # ============= Startup/Shutdown Events =============
 

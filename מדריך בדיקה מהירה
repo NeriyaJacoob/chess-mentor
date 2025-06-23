@@ -1,0 +1,145 @@
+# מדריך בדיקה מהירה - ChessMentor
+
+## בדיקות Backend (Terminal 1)
+
+```bash
+cd backend-python
+python main.py
+```
+
+### בדיקות לביצוע:
+
+#### 1. בדיקת בריאות
+```bash
+curl http://localhost:5001/health
+```
+תגובה צפויה:
+```json
+{
+  "status": "healthy",
+  "mongodb_connected": true,
+  "database": {...},
+  "websocket_connections": 0
+}
+```
+
+#### 2. בדיקת רישום
+```bash
+curl -X POST http://localhost:5001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testuser",
+    "password": "test123",
+    "email": "test@example.com"
+  }'
+```
+
+#### 3. בדיקת התחברות
+```bash
+curl -X POST http://localhost:5001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "testuser",
+    "password": "test123"
+  }'
+```
+שמור את ה-`access_token` מהתגובה.
+
+## בדיקות Frontend (Terminal 2)
+
+```bash
+cd frontend-react
+npm start
+```
+
+### בדיקות בדפדפן:
+
+#### 1. דף התחברות (http://localhost:3000/login)
+- [ ] הדף נטען ללא שגיאות
+- [ ] ניתן להתחבר עם המשתמש שיצרת
+- [ ] מועבר לדף הבית אחרי התחברות
+
+#### 2. סרגל צדדי
+- [ ] כל האייקונים מופיעים
+- [ ] ניווט בין עמודים עובד
+- [ ] עמוד Chat מופיע ברשימה
+
+#### 3. עמוד צ'אט (http://localhost:3000/chat)
+- [ ] העמוד נטען
+- [ ] מופיעה הודעת "Connected"
+- [ ] ניתן לשלוח הודעות
+- [ ] רשימת משתמשים מתעדכנת
+
+#### 4. עמוד משחק (http://localhost:3000/play)
+- [ ] לוח השח נטען
+- [ ] כפתור "New Game" עובד
+- [ ] ניתן להזיז כלים
+- [ ] הבוט משחק בתגובה
+
+## בדיקת WebSocket (Console בדפדפן)
+
+```javascript
+// בדיקת חיבור צ'אט
+const ws = new WebSocket('ws://localhost:5001/ws/test123');
+ws.onopen = () => console.log('Connected!');
+ws.onmessage = (e) => console.log('Message:', JSON.parse(e.data));
+
+// בדיקת חיבור משחק
+const gameWs = new WebSocket('ws://localhost:5001/ws/game/player123');
+gameWs.onopen = () => {
+  console.log('Game connected!');
+  gameWs.send(JSON.stringify({
+    action: 'join',
+    data: { name: 'TestPlayer', elo: 1200 }
+  }));
+};
+```
+
+## בדיקת MongoDB (MongoDB Compass)
+
+1. התחבר עם ה-connection string
+2. בדוק שנוצר database בשם `chessmentor`
+3. בדוק collections:
+   - `users` - משתמשים רשומים
+   - `sessions` - sessions פעילים
+   - `games` - משחקים (אם שיחקת)
+
+## צ'קליסט תקינות
+
+### Backend ✓
+- [ ] השרת עולה ללא שגיאות
+- [ ] MongoDB מתחבר בהצלחה
+- [ ] API endpoints עובדים
+- [ ] WebSocket מקבל חיבורים
+
+### Frontend ✓
+- [ ] האפליקציה נטענת
+- [ ] ניווט עובד
+- [ ] WebSocket מתחבר
+- [ ] אין שגיאות בקונסול
+
+### Integration ✓
+- [ ] Login flow עובד מקצה לקצה
+- [ ] צ'אט עובד בזמן אמת
+- [ ] משחקים מתחילים כראוי
+- [ ] נתונים נשמרים ב-DB
+
+## בעיות נפוצות
+
+| בעיה | פתרון |
+|------|--------|
+| "Cannot connect to MongoDB" | בדוק connection string ו-IP whitelist |
+| "WebSocket connection failed" | וודא ששני השרתים רצים |
+| "CORS error" | בדוק הגדרות CORS ב-main.py |
+| "Token invalid" | נקה localStorage והתחבר מחדש |
+| "Chess moves not working" | בדוק console לשגיאות WebSocket |
+
+## הצלחה! 🎉
+
+אם כל הבדיקות עברו בהצלחה, המערכת מוכנה לשימוש!
+
+### הבא בתור:
+1. התקן Stockfish למשחקים אמיתיים
+2. הוסף עוד תכונות לצ'אט
+3. שפר את ממשק המשתמש
+4. הוסף אנימציות למהלכים
